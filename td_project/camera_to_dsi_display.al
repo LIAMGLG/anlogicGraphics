@@ -338,10 +338,35 @@
             </File>
             <File Path="../user_source/hdl_source/key_toggle.v">
                 <FileInfo>
+                    <Attr Name="AutoExcluded" Val="true"/>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
                     <Attr Name="CompileOrder" Val="57"/>
+                </FileInfo>
+            </File>
+            <File Path="../user_source/hdl_source/isp/edge_detect_96.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="58"/>
+                </FileInfo>
+            </File>
+            <File Path="../user_source/hdl_source/key_video_mode.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="59"/>
+                </FileInfo>
+            </File>
+            <File Path="../user_source/hdl_source/isp/cartoon_96.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="60"/>
                 </FileInfo>
             </File>
         </Verilog>

@@ -1,7 +1,7 @@
 module isp_top (
     input 			axi4s_video_aclk,
     input 			I_rst_n			,
-    input 			I_key_bin		,   // key1 (active low): toggles binarization on/off
+    input 			I_key_bin		,   // key1 (active low): cycles normal / binary / edge / cartoon
     input 			I_tlast			,
     input 			I_tuser			,
     input [39:0] 	I_tdata			,
@@ -39,12 +39,18 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire [ 95:0] bin_O_tdata;
   wire         bin_O_tvalid;
 
-  wire         S_bin_en;          // 1 = 二值化, 0 = 原图
-  wire [ 95:0] bin_O_tdata_sel;   // 二选一后的数据
-
+  wire [1:0] video_mode;
+  wire [95:0] edge_O_tdata;
+  wire [95:0] cartoon_O_tdata;
+  wire edge_O_tlast, edge_O_tuser, edge_O_tvalid;
+  reg [95:0] normal_data_d1, binary_data_d1, normal_data_d2, binary_data_d2;
+  reg [1:0] video_mode_d1, video_mode_d2;
+  wire [95:0] processed_data = (video_mode_d2 == 2'd3) ? cartoon_O_tdata :
+                               (video_mode_d2 == 2'd2) ? edge_O_tdata :
+                               (video_mode_d2 == 2'd1) ? binary_data_d2 : normal_data_d2;
   assign awb_O_tready = O_tready;
   assign O_tdata  = awb_O_tdata_128;
-  assign O_tlast  = awb_O_tlast    ;
+  assign O_tlast  = edge_O_tlast    ;
   assign O_tuser  = awb_O_tuser_128    ;
   assign O_tvalid = awb_O_tvalid_128   ;
   
@@ -115,27 +121,55 @@ binary_threshold_96 #(
     .O_tvalid(bin_O_tvalid)
 );
 
-// ---------------------------------------------------------------------------
-// key1（低有效）每按一次翻转二值化开关，档位在帧起始生效
-// ---------------------------------------------------------------------------
-key_toggle u_key_toggle (
-    .I_clk         (axi4s_video_aclk),
-    .I_rst_n       (I_rst_n         ),
-    .I_key         (I_key_bin       ),
-    .I_frame_start (awb_O_tuser     ),
-    .O_level       (S_bin_en        )
+// All paths run continuously. Keep normal/binary data and mode aligned
+// with the edge module's two-cycle latency, including the first frame beat.
+edge_detect_96 #(
+    .IMG_WIDTH(1280), .IMG_HEIGHT(720), .EDGE_TH(11'd80)
+) u_edge_detect_96 (
+    .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
+    .I_tlast(awb_O_tlast), .I_tuser(awb_O_tuser),
+    .I_tdata(awb_O_tdata), .I_tvalid(awb_O_tvalid),
+    .I_tready(), .O_tready(awb_O_tready),
+    .O_tlast(edge_O_tlast), .O_tuser(edge_O_tuser),
+    .O_tdata(edge_O_tdata), .O_tvalid(edge_O_tvalid)
 );
 
-// 1 = 二值化，0 = 白平衡后的原图
-assign bin_O_tdata_sel = S_bin_en ? bin_O_tdata : awb_O_tdata;
+// Reuse the edge mask and align posterized colors to its window centers.
+cartoon_96 #(.IMG_WIDTH(1280), .IMG_HEIGHT(720)) u_cartoon_96 (
+    .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
+    .I_tlast(awb_O_tlast), .I_tuser(awb_O_tuser),
+    .I_tdata(awb_O_tdata), .I_tvalid(awb_O_tvalid),
+    .I_edge_data(edge_O_tdata), .O_tdata(cartoon_O_tdata)
+);
+key_video_mode u_key_video_mode (
+    .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
+    .I_key(I_key_bin), .I_frame_start(awb_O_tuser), .O_mode(video_mode)
+);
 
+always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
+    if (!I_rst_n) begin
+        normal_data_d1 <= 96'd0;
+        binary_data_d1 <= 96'd0;
+        video_mode_d1 <= 2'd0;
+        normal_data_d2 <= 96'd0;
+        binary_data_d2 <= 96'd0;
+        video_mode_d2 <= 2'd0;
+    end else begin
+        normal_data_d1 <= awb_O_tdata;
+        binary_data_d1 <= bin_O_tdata;
+        video_mode_d1 <= video_mode;
+        normal_data_d2 <= normal_data_d1;
+        binary_data_d2 <= binary_data_d1;
+        video_mode_d2 <= video_mode_d1;
+    end
+end
     data_96bit_to_128bit u_data_96bit_to_128bit(
         .I_clk              ( axi4s_video_aclk  ),
         .I_rst_n            ( I_rst_n           ),
 	
-        .I_96b_frame_start  ( bin_O_tuser       ),
-        .I_96b_valid        ( bin_O_tvalid      ),
-        .I_96b_data         ( bin_O_tdata_sel   ),
+        .I_96b_frame_start  ( edge_O_tuser      ),
+        .I_96b_valid        ( edge_O_tvalid     ),
+        .I_96b_data         ( processed_data    ),
 	
         .O_128b_frame_start ( awb_O_tuser_128  	),
         .O_128b_valid       ( awb_O_tvalid_128 	),

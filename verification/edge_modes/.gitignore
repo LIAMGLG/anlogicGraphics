@@ -1,0 +1,9 @@
+work*/
+*.log
+*.logw
+*.prj
+*.tcl
+*.area
+*.db
+*.status
+*.qor

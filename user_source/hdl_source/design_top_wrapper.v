@@ -703,7 +703,7 @@ assign S_raw_tuser  = S_axis_tuser;
 isp_top u_isp_top (
 .axi4s_video_aclk(S_csi_rx_clk),
 .I_rst_n         (S_rst_n),
-.I_key_bin       (I_button[0]),   // key1: press to toggle binarization
+.I_key_bin       (I_button[0]),   // key1: cycle normal / binary / edge / cartoon
 .I_tlast         (S_raw_tlast	),
 .I_tuser         (S_raw_tuser	),
 .I_tdata         (S_raw_tdata	),
