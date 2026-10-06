@@ -6,7 +6,7 @@ module tb_cartoon;
     wire [95:0] edges, cartoon;
     wire edge_valid;
     edge_detect_96 #(.IMG_WIDTH(16),.IMG_HEIGHT(6),.EDGE_TH(80)) edge_dut (
-        .I_clk(clk),.I_rst_n(rst_n),.I_tlast(last),.I_tuser(user),.I_tvalid(valid),
+        .I_clk(clk),.I_rst_n(rst_n),.I_edge_th(11'd80),.I_tlast(last),.I_tuser(user),.I_tvalid(valid),
         .I_tdata(data),.I_tready(),.O_tready(1'b1),.O_tdata(edges),
         .O_tlast(),.O_tuser(),.O_tvalid(edge_valid));
     cartoon_96 #(.IMG_WIDTH(16),.IMG_HEIGHT(6)) dut (

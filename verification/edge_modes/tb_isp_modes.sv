@@ -27,7 +27,7 @@ module tb_isp_modes;
     reg rst_n=0, valid=0, user=0, last=0;
     reg [39:0] data=0;
     reg [1:0] requested=0;
-    isp_top dut (.axi4s_video_aclk(clk), .I_rst_n(rst_n), .I_key_bin(1'b1),
+    isp_top dut (.axi4s_video_aclk(clk), .I_rst_n(rst_n), .I_key_bin(1'b1), .I_adjust_enable(1'b0), .I_key_threshold(1'b1), .I_key_edge(1'b1),
         .I_tlast(last), .I_tuser(user), .I_tdata(data), .I_tvalid(valid), .I_tdest(10'd0),
         .O_tready(1'b1), .O_tdata(), .O_tlast(), .O_tuser(), .O_tvalid(), .I_tready());
     reg [95:0] expected_d1=0, expected_d2=0;
@@ -46,7 +46,7 @@ module tb_isp_modes;
             luminance = {2'b0,data[23:18]} + {1'b0,data[15:9]} + {2'b0,data[7:2]};
             case(active_mode)
                 0: wanted = {4{data[23:0]}};
-                1: wanted = luminance >= 128 ? {96{1'b1}} : 96'd0;
+                1: wanted = luminance >= 64 ? {96{1'b1}} : 96'd0;
                 2: wanted = 0; // two rows: Sobel windows are masked
                 3: wanted = (row >= 1 && group_index > 0) ? {4{24'h55aaff}} : 96'd0;
             endcase

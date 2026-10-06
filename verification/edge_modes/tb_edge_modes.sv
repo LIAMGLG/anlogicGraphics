@@ -5,10 +5,11 @@ module tb_edge_modes;
     reg rst_n = 0;
     reg last = 0, user = 0, valid = 0;
     reg [95:0] data = 0;
+    reg [10:0] edge_threshold=80;
     wire out_last, out_user, out_valid;
     wire [95:0] out_data;
-    edge_detect_96 #(.IMG_WIDTH(16), .IMG_HEIGHT(6), .EDGE_TH(80)) edge_dut (
-        .I_clk(clk), .I_rst_n(rst_n), .I_tlast(last), .I_tuser(user),
+    edge_detect_96 #(.IMG_WIDTH(16), .IMG_HEIGHT(6), .EDGE_TH(80), .DYNAMIC_THRESHOLD(1)) edge_dut (
+        .I_clk(clk), .I_rst_n(rst_n), .I_edge_th(edge_threshold), .I_tlast(last), .I_tuser(user),
         .I_tdata(data), .I_tvalid(valid), .I_tready(), .O_tready(1'b1),
         .O_tlast(out_last), .O_tuser(out_user), .O_tdata(out_data), .O_tvalid(out_valid)
     );
@@ -71,6 +72,7 @@ module tb_edge_modes;
                     @(negedge clk);
                     valid = 1; user = (frame % 2 == 0 && x == 0 && y == 0);
                     last = (x == 3);
+                    edge_threshold = (frame == 0) ? 11'd0 : ((x % 2) ? 11'd80 : 11'd2047);
                     expected = 0;
                     for (lane = 0; lane < 4; lane = lane + 1) begin
                         level = gray[y][2*x + lane/2];
@@ -85,7 +87,7 @@ module tb_edge_modes;
                             gy = gray[y-2][lane-2] + 2*gray[y-2][lane-1] + gray[y-2][lane]
                                  -gray[y][lane-2] - 2*gray[y][lane-1] - gray[y][lane];
                             magnitude = (gx < 0 ? -gx : gx) + (gy < 0 ? -gy : gy);
-                            if (magnitude >= 80) expected[95 - p*48 -: 48] = 48'hffffffffffff;
+                            if (magnitude >= edge_threshold) expected[95 - p*48 -: 48] = 48'hffffffffffff;
                         end
                     end
                     @(posedge clk); #1;

@@ -1,10 +1,12 @@
 module edge_detect_96 #(
     parameter IMG_WIDTH  = 1280,
     parameter IMG_HEIGHT = 720,
-    parameter EDGE_TH    = 11'd80
+    parameter EDGE_TH    = 11'd80,
+    parameter integer DYNAMIC_THRESHOLD = 0
 )(
     input               I_clk,
     input               I_rst_n,
+    input      [10:0]   I_edge_th,
     input               I_tlast,
     input               I_tuser,
     input      [95:0]   I_tdata,
@@ -92,6 +94,8 @@ wire window_valid = (current_y >= 11'd2) && (current_x != 11'd0) && !I_tuser;
 // Register gradients before absolute values, sum and threshold to keep
 // the two-pixel Sobel calculation within the camera clock period.
 reg [25:0] gradient0_d1, gradient1_d1;
+wire [10:0] threshold_value = DYNAMIC_THRESHOLD ? I_edge_th : EDGE_TH;
+reg [10:0] threshold_d1;
 reg window_valid_d1, last_d1, user_d1, valid_d1;
 wire [12:0] abs_gx0 = gradient0_d1[25] ? -gradient0_d1[25:13] : gradient0_d1[25:13];
 wire [12:0] abs_gy0 = gradient0_d1[12] ? -gradient0_d1[12:0] : gradient0_d1[12:0];
@@ -99,14 +103,15 @@ wire [12:0] abs_gx1 = gradient1_d1[25] ? -gradient1_d1[25:13] : gradient1_d1[25:
 wire [12:0] abs_gy1 = gradient1_d1[12] ? -gradient1_d1[12:0] : gradient1_d1[12:0];
 wire [13:0] mag0 = {1'b0,abs_gx0} + {1'b0,abs_gy0};
 wire [13:0] mag1 = {1'b0,abs_gx1} + {1'b0,abs_gy1};
-wire edge0 = window_valid_d1 && (mag0 >= EDGE_TH);
-wire edge1 = window_valid_d1 && (mag1 >= EDGE_TH);
+wire edge0 = window_valid_d1 && (mag0 >= threshold_d1);
+wire edge1 = window_valid_d1 && (mag1 >= threshold_d1);
 
 wire [23:0] out0 = edge0 ? 24'hffffff : 24'h000000;
 wire [23:0] out1 = edge1 ? 24'hffffff : 24'h000000;
 
 always @(posedge I_clk or negedge I_rst_n) begin
     if(!I_rst_n) begin
+        threshold_d1 <= EDGE_TH;
         gradient0_d1 <= 26'd0; gradient1_d1 <= 26'd0;
         window_valid_d1 <= 1'b0;
         last_d1 <= 1'b0; user_d1 <= 1'b0; valid_d1 <= 1'b0;
@@ -118,6 +123,7 @@ always @(posedge I_clk or negedge I_rst_n) begin
         bot_prev2 <= 8'd0; bot_prev1 <= 8'd0;
         // No memory reset: the first two masked rows initialize both buffers.
     end else begin
+        threshold_d1 <= threshold_value;
         gradient0_d1 <= gradient0;
         gradient1_d1 <= gradient1;
         window_valid_d1 <= window_valid;

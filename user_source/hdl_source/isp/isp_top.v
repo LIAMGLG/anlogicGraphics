@@ -2,6 +2,9 @@ module isp_top (
     input 			axi4s_video_aclk,
     input 			I_rst_n			,
     input 			I_key_bin		,   // key1 (active low): cycles normal / binary / edge / cartoon
+    input wire      I_adjust_enable, // sw1 high enables k2/k3
+    input wire      I_key_threshold, // k2: raise binary threshold
+    input wire      I_key_edge,      // k3: raise Sobel threshold
     input 			I_tlast			,
     input 			I_tuser			,
     input [39:0] 	I_tdata			,
@@ -39,6 +42,8 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire [ 95:0] bin_O_tdata;
   wire         bin_O_tvalid;
 
+  wire [7:0] binary_threshold;
+  wire [10:0] edge_threshold;
   wire [1:0] video_mode;
   wire [95:0] edge_O_tdata;
   wire [95:0] cartoon_O_tdata;
@@ -109,8 +114,9 @@ awb #(
 
 // 白平衡之后的四像素 RGB888 做二值化，再做 96→128 打包
 binary_threshold_96 #(
-    .THRESHOLD(8'd128)
+    .THRESHOLD(8'd64), .DYNAMIC_THRESHOLD(1)
 ) u_binary_threshold_96 (
+    .I_threshold(binary_threshold),
     .I_tlast (awb_O_tlast),
     .I_tuser (awb_O_tuser),
     .I_tdata (awb_O_tdata),
@@ -124,8 +130,9 @@ binary_threshold_96 #(
 // All paths run continuously. Keep normal/binary data and mode aligned
 // with the edge module's two-cycle latency, including the first frame beat.
 edge_detect_96 #(
-    .IMG_WIDTH(1280), .IMG_HEIGHT(720), .EDGE_TH(11'd80)
+    .IMG_WIDTH(1280), .IMG_HEIGHT(720), .EDGE_TH(11'd60), .DYNAMIC_THRESHOLD(1)
 ) u_edge_detect_96 (
+    .I_edge_th(edge_threshold),
     .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
     .I_tlast(awb_O_tlast), .I_tuser(awb_O_tuser),
     .I_tdata(awb_O_tdata), .I_tvalid(awb_O_tvalid),
@@ -140,6 +147,12 @@ cartoon_96 #(.IMG_WIDTH(1280), .IMG_HEIGHT(720)) u_cartoon_96 (
     .I_tlast(awb_O_tlast), .I_tuser(awb_O_tuser),
     .I_tdata(awb_O_tdata), .I_tvalid(awb_O_tvalid),
     .I_edge_data(edge_O_tdata), .O_tdata(cartoon_O_tdata)
+);
+key_isp_thresholds #(.BIN_RESET(8'd64), .EDGE_RESET(11'd60)) u_key_isp_thresholds (
+    .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
+    .I_adjust_enable(I_adjust_enable),
+    .I_key_threshold(I_key_threshold), .I_key_edge(I_key_edge),
+    .I_frame_start(awb_O_tuser), .O_threshold(binary_threshold), .O_edge_th(edge_threshold)
 );
 key_video_mode u_key_video_mode (
     .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
