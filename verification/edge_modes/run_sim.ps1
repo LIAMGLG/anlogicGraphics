@@ -7,6 +7,16 @@ try {
     & (Join-Path $ModelSimBin 'vlib.exe') $library
     if ($LASTEXITCODE -ne 0) { throw 'vlib failed' }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $library -sv `
+        user_source/hdl_source/isp/color_gain_rgb96.v `
+        user_source/hdl_source/isp/saturation_rgb96.v `
+        user_source/hdl_source/isp/color_reduce_rgb96.v `
+        user_source/hdl_source/isp/color_shape_detect.v `
+        user_source/hdl_source/isp/shape_contour_classifier.v `
+        user_source/hdl_source/isp/detection_result_stabilizer.v `
+        user_source/hdl_source/isp/detection_overlay_rgb96.v `
+        user_source/hdl_source/isp/detection_mask_osd_rgb96.v `
+        user_source/hdl_source/isp/osd_char_lib.v `
+        user_source/hdl_source/isp/mode_osd_rgb96.v `
         user_source/hdl_source/isp/cartoon_96.v `
         user_source/hdl_source/isp/edge_detect_96.v `
         user_source/hdl_source/key_isp_thresholds.v `
@@ -14,7 +24,8 @@ try {
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `
         user_source/hdl_source/isp/isp_top.v `
-        verification/edge_modes/tb_edge_modes.sv
+        verification/edge_modes/tb_edge_modes.sv `
+        verification/edge_modes/tb_rgb_gain.sv
     if ($LASTEXITCODE -ne 0) { throw 'vlog failed' }
     & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $library tb_edge_modes `
         -do 'onerror {quit -code 1}; run -all; quit -code 0' `
@@ -45,6 +56,16 @@ try {
     & (Join-Path $ModelSimBin 'vlib.exe') $ispLibrary
     if ($LASTEXITCODE -ne 0) { throw 'ISP vlib failed' }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLibrary -sv `
+        user_source/hdl_source/isp/color_gain_rgb96.v `
+        user_source/hdl_source/isp/saturation_rgb96.v `
+        user_source/hdl_source/isp/color_reduce_rgb96.v `
+        user_source/hdl_source/isp/color_shape_detect.v `
+        user_source/hdl_source/isp/shape_contour_classifier.v `
+        user_source/hdl_source/isp/detection_result_stabilizer.v `
+        user_source/hdl_source/isp/detection_overlay_rgb96.v `
+        user_source/hdl_source/isp/detection_mask_osd_rgb96.v `
+        user_source/hdl_source/isp/osd_char_lib.v `
+        user_source/hdl_source/isp/mode_osd_rgb96.v `
         user_source/hdl_source/isp/cartoon_96.v `
         user_source/hdl_source/isp/edge_detect_96.v `
         user_source/hdl_source/key_isp_thresholds.v `
@@ -62,6 +83,21 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'ISP vsim failed' }
     if (!(Select-String -Quiet -LiteralPath verification/edge_modes/isp_simulation.log -Pattern 'PASS: ISP normal/binary/edge/cartoon mux')) {
         throw 'ISP simulation did not reach PASS'
+    }
+    & (Join-Path $ModelSimBin 'vlog.exe') -work $library -sv verification/edge_modes/tb_mode_osd.sv
+    if ($LASTEXITCODE -ne 0) { throw 'OSD vlog failed' }
+    & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $library tb_mode_osd `
+        -do 'onerror {quit -code 1}; run -all; quit -code 0' `
+        -l verification/edge_modes/osd_simulation.log
+    if ($LASTEXITCODE -ne 0) { throw 'OSD vsim failed' }
+    if (!(Select-String -Quiet -LiteralPath verification/edge_modes/osd_simulation.log -Pattern 'PASS: mode OSD')) {
+        throw 'OSD simulation did not reach PASS'
+    }
+    & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $library tb_rgb_gain `
+        -do 'onerror {quit -code 1}; run -all; quit -code 0' `
+        -l verification/edge_modes/gain_simulation.log
+    if ($LASTEXITCODE -ne 0 -or !(Select-String -Quiet -LiteralPath verification/edge_modes/gain_simulation.log -Pattern 'PASS: RGB gains')) {
+        throw 'RGB gain simulation did not reach PASS'
     }
 } finally {
     Pop-Location

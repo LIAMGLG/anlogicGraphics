@@ -708,6 +708,7 @@ isp_top u_isp_top (
 .I_adjust_enable (I_sw1),
 .I_key_threshold (I_button[1]),   // k2: binary threshold +16
 .I_key_edge      (I_button[2]),   // k3: edge threshold +20
+.I_key_detect    (I_button[3]),   // k4: toggle detection overlays
 .I_tlast         (S_raw_tlast	),
 .I_tuser         (S_raw_tuser	),
 .I_tdata         (S_raw_tdata	),
