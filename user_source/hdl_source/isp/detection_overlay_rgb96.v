@@ -31,7 +31,7 @@ module detection_overlay_rgb96 #(
     reg input_valid,input_user,input_last;
     wire [11:0] tx=cx-12'd16;
     wire [10:0] ty=cy-11'd96;
-    reg [2:0] nr,ng,nb;
+    reg [2:0] nr,ng;
     reg [127:0] summary;
     reg [127:0] legend;
     reg [127:0] diagnostic;
@@ -78,19 +78,18 @@ module detection_overlay_rgb96 #(
         endcase end
     endfunction
     always @(*) begin
-        nr=0; ng=0; nb=0;
+        nr=0; ng=0;
         stat_box=0;
         for(stat=0;stat<4;stat=stat+1) begin
             stat_box=frame_boxes[stat*64 +:64];
             if(stat_box[63]) case(stat_box[62:61])
-                1: nr=nr+1'b1; 2: ng=ng+1'b1; 3: nb=nb+1'b1;
+                1: nr=nr+1'b1; 2: ng=ng+1'b1;
             endcase
         end
-        summary="N:0 R:0 G:0 B:0 ";
+        summary="N:0 R:0 G:0     ";
         summary[111:104]=8'h30+frame_count;
         summary[79:72]=8'h30+nr;
         summary[47:40]=8'h30+ng;
-        summary[15:8]=8'h30+nb;
         if(frame_overflow) summary="LABEL OVERFLOW  ";
         entry=0;
         if(ty<64) entry=frame_boxes[ty[5:4]*64 +:64];

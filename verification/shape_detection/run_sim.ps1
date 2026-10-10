@@ -41,6 +41,9 @@ try {
     & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLib -sv `
         user_source/hdl_source/isp/color_gain_rgb96.v `
         user_source/hdl_source/isp/saturation_rgb96.v `
+        user_source/hdl_source/isp/grayscale_rgb96.v `
+        user_source/hdl_source/isp/anlogic_logo_words.v `
+        user_source/hdl_source/isp/logo_osd_rgb96.v `
         user_source/hdl_source/isp/osd_char_lib.v `
         user_source/hdl_source/isp/mode_osd_rgb96.v `
         user_source/hdl_source/isp/shape_contour_classifier.v `
@@ -51,7 +54,6 @@ try {
         user_source/hdl_source/isp/detection_mask_osd_rgb96.v `
         user_source/hdl_source/isp/cartoon_96.v `
         user_source/hdl_source/isp/edge_detect_96.v `
-        user_source/hdl_source/key_isp_thresholds.v `
         user_source/hdl_source/key_video_mode.v `
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `

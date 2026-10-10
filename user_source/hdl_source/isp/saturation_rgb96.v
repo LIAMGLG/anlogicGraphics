@@ -4,15 +4,15 @@ module saturation_rgb96 (
     input wire I_clk,I_rst_n,
     input wire [95:0] I_tdata,
     input wire I_tvalid,I_tuser,I_tlast,
-    input wire [1:0] I_mode,
+    input wire [2:0] I_mode,
     output reg [95:0] O_tdata,
     output reg O_tvalid,O_tuser,O_tlast,
-    output reg [1:0] O_mode
+    output reg [2:0] O_mode
 );
     reg [95:0] rgb_d;
     reg [9:0] luma_sum[0:3];
     reg valid_d,user_d,last_d;
-    reg [1:0] mode_d;
+    reg [2:0] mode_d;
     integer lane;
     function [7:0] adjust;
         input [7:0] channel,luma;

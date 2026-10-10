@@ -14,7 +14,7 @@ module tb_edge_modes;
         .O_tlast(out_last), .O_tuser(out_user), .O_tdata(out_data), .O_tvalid(out_valid)
     );
     reg key = 1, frame_start = 0;
-    wire [1:0] mode;
+    wire [2:0] mode;
     key_video_mode mode_dut (.I_clk(clk), .I_rst_n(rst_n), .I_key(key),
         .I_frame_start(frame_start), .O_mode(mode));
     integer gray [0:5][0:7];
@@ -22,7 +22,7 @@ module tb_edge_modes;
     reg [95:0] expected;
 
     task check_mode;
-        input [1:0] want;
+        input [2:0] want;
         begin
             #1;
             if (mode !== want) $fatal(1, "Mode mismatch: got %d want %d", mode, want);
@@ -30,8 +30,8 @@ module tb_edge_modes;
     endtask
 
     task press_key;
-        input [1:0] old_mode;
-        input [1:0] new_mode;
+        input [2:0] old_mode;
+        input [2:0] new_mode;
         begin
             @(negedge clk); key = 0;
             repeat (100020) @(negedge clk);
@@ -119,8 +119,9 @@ module tb_edge_modes;
         press_key(0,1);
         press_key(1,2);
         press_key(2,3);
-        press_key(3,0);
-        $display("PASS: Sobel reference, borders, bubbles, SOF, reset, key debounce and four-mode frame switching");
+        press_key(3,4);
+        press_key(4,0);
+        $display("PASS: Sobel reference, borders, bubbles, SOF, reset, key debounce and five-mode frame switching");
         $finish;
     end
 endmodule

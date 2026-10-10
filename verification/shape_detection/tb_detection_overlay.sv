@@ -63,8 +63,8 @@ module tb_detection_overlay;
                             bits=golden_font("1",row-200);
                             pixel=bits[15-(px-300)] ? 24'hffffff : 24'h000000;
                         end
-                        text=frame==0 ? "N:1 R:1 G:0 B:0 " : "LABEL OVERFLOW  ";
-                        if(frame==3) text="N:4 R:2 G:1 B:1 ";
+                        text=frame==0 ? "N:1 R:1 G:0     " : "LABEL OVERFLOW  ";
+                        if(frame==3) text="N:4 R:2 G:1     ";
                         if(px>=16 && px<272 && row>=64 && row<80) begin
                             idx=(px-16)/16;ch=text[127-idx*8 -:8];bits=golden_font(ch,row-64);
                             pixel=bits[15-(px-16)%16] ? 24'hfff200 : 24'h000000;

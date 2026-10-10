@@ -8,8 +8,7 @@ module tb_detection_isp;
     reg [23:0] rgb;
     wire [127:0] outdata;
     wire outvalid,outuser;
-    isp_top dut (.axi4s_video_aclk(clk),.I_rst_n(rst),.I_key_bin(1'b1),.I_adjust_enable(1'b0),
-        .I_key_threshold(1'b1),.I_key_edge(1'b1),.I_key_detect(key),
+    isp_top dut (.axi4s_video_aclk(clk),.I_rst_n(rst),.I_key_bin(1'b1),.I_key_detect(key),
         .I_tlast(last),.I_tuser(user),.I_tdata(data),.I_tvalid(valid),.I_tdest(10'd0),
         .O_tready(1'b1),.O_tdata(outdata),.O_tlast(),.O_tuser(outuser),.O_tvalid(outvalid),.I_tready());
     initial begin
@@ -27,23 +26,25 @@ module tb_detection_isp;
         @(negedge clk);valid=0;user=0;last=0;
         waits=0;
         while(!dut.u_detection_stabilizer.O_update && waits<1500000) begin @(posedge clk);#1;waits=waits+1;end
-        if(waits==1500000 || dut.detected_count!=4 || dut.detected_overflow) $fatal(1,"Full ISP detection count");
-        if(dut.detected_boxes[128+60 -:2]!=3 || dut.detected_boxes[128+62 -:2]!=1)
+        if(waits==1500000 || dut.detected_count!=3 || dut.detected_overflow) $fatal(1,"Full ISP detection count (blue ignored)");
+        if(dut.detected_boxes[64+60 -:2]!=3 || dut.detected_boxes[64+62 -:2]!=1)
             $fatal(1,"Full ISP red triangle classification");
-        if(dut.detected_boxes[62:61]!=3 || dut.detected_boxes[60:59]!=2)
-            $fatal(1,"Full ISP largest disk color/shape");
-        if(dut.detected_boxes[58:48]!=976 || dut.detected_boxes[37:27]!=1107 ||
-           dut.detected_boxes[47:38]!=176 || dut.detected_boxes[26:17]!=307)
+        if(dut.detected_boxes[62:61]!=1 || dut.detected_boxes[60:59]!=1)
+            $fatal(1,"Full ISP largest red rectangle color/shape");
+        for(integer obj=0;obj<3;obj=obj+1)
+            if(dut.detected_boxes[obj*64+61 +:2]==3) $fatal(1,"Blue must not be detected");
+        if(dut.detected_boxes[58:48]!=400 || dut.detected_boxes[37:27]!=495 ||
+           dut.detected_boxes[47:38]!=300 || dut.detected_boxes[26:17]!=395)
             $fatal(1,"Full ISP scale mapping");
         // A publication between frames must become visible at the next OSD SOF.
         @(negedge clk);valid=1;user=1;data=0;
         @(negedge clk);valid=0;user=0;
         repeat(10) @(negedge clk);
-        if(dut.u_detection_overlay.count!=4 || dut.u_detection_overlay.boxes!==dut.detected_boxes)
+        if(dut.u_detection_overlay.count!=3 || dut.u_detection_overlay.boxes!==dut.detected_boxes)
             $fatal(1,"Result snapshot integration");
         if(!dut.u_detection_mask_osd.ready || dut.u_detection_overlay.debug_info!==dut.raw_debug)
             $fatal(1,"Mask/debug publication integration");
-        if(dut.raw_debug[3:0]!=0 || dut.raw_debug[7:4]<5 || dut.raw_debug[23:16]!=8'h30)
+        if(dut.raw_debug[7:0]!=8'h40 || dut.raw_debug[15:8]!=8'h30)
             $fatal(1,"Contour diagnostic metadata");
         // Exercise the actual fourth-key debounce and frame-committed enable.
         key=0;

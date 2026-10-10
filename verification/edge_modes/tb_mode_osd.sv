@@ -3,7 +3,7 @@ module tb_mode_osd;
     reg clk=0; always #5 clk=~clk;
     reg rst_n=0, valid=0, user=0, last=0;
     reg [95:0] data=0;
-    reg [1:0] mode=0;
+    reg [2:0] mode=0;
     wire [95:0] result;
     wire ov, ou, ol;
     mode_osd_rgb96 dut (.I_clk(clk), .I_rst_n(rst_n), .I_mode(mode),
@@ -23,16 +23,17 @@ module tb_mode_osd;
             case(c)
                 8'h41: bitmap=256'h000000001c0014001400140036003e0022002200000000000000000000000000;
                 8'h42: bitmap=256'h000000003e00330033003e003300330033003e00000000000000000000000000;
-                8'h43: bitmap=256'h0000000003f00c0c18003000300030003000300018000c0c03f0000000000000;
+                8'h43: bitmap=256'h000000001e003300300030003000300033001e00000000000000000000000000;
                 8'h45: bitmap=256'h000000003e00300030003e003000300030003e00000000000000000000000000;
+                8'h47: bitmap=256'h000000001c003200600060006e00660036001e00000000000000000000000000;
                 8'h49: bitmap=256'h000000001e000c000c000c000c000c000c001e00000000000000000000000000;
                 8'h4c: bitmap=256'h0000000030003000300030003000300030003e00000000000000000000000000;
                 8'h4d: bitmap=256'h0000000036003600360036002a002a0022002200000000000000000000000000;
-                8'h4e: bitmap=256'h00000000300c380c3c0c360c330c318c30cc306c303c301c300c000000000000;
+                8'h4e: bitmap=256'h0000000033003b003b0037003300330033003300000000000000000000000000;
                 8'h4f: bitmap=256'h000000001e003200630063006300630036003c00000000000000000000000000;
                 8'h52: bitmap=256'h000000003e003300330033003c00360036003200000000000000000000000000;
                 8'h53: bitmap=256'h000000001e00300030003c000f00030003003e00000000000000000000000000;
-                8'h54: bitmap=256'h000000003ffc03c003c003c003c003c003c003c003c003c003c0000000000000;
+                8'h54: bitmap=256'h000000003f000c000c000c000c000c000c000c00000000000000000000000000;
                 8'h59: bitmap=256'h00000000318013001b001e000c000c000c000c00000000000000000000000000;
                 default: bitmap=0;
             endcase
@@ -49,6 +50,7 @@ module tb_mode_osd;
             case(mode)
                 0: text="NORMAL "; 1: text="BINARY ";
                 2: text="SOBEL  "; 3: text="CARTOON";
+                4: text="GRAY   ";
             endcase
             if(vv) begin
                 for(lane=0;lane<4;lane=lane+1) begin
@@ -75,7 +77,7 @@ module tb_mode_osd;
         repeat(3) @(negedge clk); rst_n=1;
         // Whole rows around all panel edges; every character and all four modes.
         // Alternating SOF with first data / SOF before data, plus valid gaps.
-        for(frame=0;frame<4;frame=frame+1) begin
+        for(frame=0;frame<5;frame=frame+1) begin
             mode=frame;
             if(frame%2) drive(0,0,0,1,0);
             for(row=0;row<50;row=row+1) begin
@@ -91,7 +93,7 @@ module tb_mode_osd;
         @(negedge clk); rst_n=1; mode=0;
         drive(0,0,1,1,0);
         if(yellow_count==0) $fatal(1,"OSD text missing");
-        $display("PASS: mode OSD four labels, pixel lanes, panel edges, SOF, gaps, reset and one-cycle control alignment");
+        $display("PASS: mode OSD five labels, pixel lanes, panel edges, SOF, gaps, reset and one-cycle control alignment");
         $finish;
     end
     initial begin #2000000; $fatal(1,"OSD timeout"); end

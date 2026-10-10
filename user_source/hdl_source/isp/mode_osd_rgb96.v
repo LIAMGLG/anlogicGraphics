@@ -6,7 +6,7 @@ module mode_osd_rgb96 #(
     parameter integer IMG_WIDTH = 1280
 )(
     input wire I_clk, I_rst_n,
-    input wire [1:0] I_mode,
+    input wire [2:0] I_mode,
     input wire [95:0] I_tdata,
     input wire I_tvalid, I_tuser, I_tlast,
     output reg [95:0] O_tdata,
@@ -29,10 +29,11 @@ module mode_osd_rgb96 #(
 
     always @(*) begin
         case (I_mode)
-            2'd0: label = "NORMAL ";
-            2'd1: label = "BINARY ";
-            2'd2: label = "SOBEL  ";
-            2'd3: label = "CARTOON";
+            3'd0: label = "NORMAL ";
+            3'd1: label = "BINARY ";
+            3'd2: label = "SOBEL  ";
+            3'd3: label = "CARTOON";
+            3'd4: label = "GRAY   ";
             default: label = "NORMAL ";
         endcase
         character = 8'h20;

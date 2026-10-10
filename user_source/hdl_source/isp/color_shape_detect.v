@@ -26,7 +26,7 @@ module color_shape_detect #(
     localparam LABELS=1<<LABEL_BITS;
     localparam IDLE=0, CLEAR=1, READ_PIXEL=2, WAIT_PIXEL=3, FIND_LEFT=4,
                FIND_TOP=5, APPLY=6, NEXT_PIXEL=7, SCAN=8, CLASSIFY=9, RANK=10, PUBLISH=11,
-               FETCH=12, MEASURE=13, BOX_AREA=14, SHAPE_START=15, SHAPE_WAIT=16,
+               FETCH=12, MEASURE=13, CHECK_SIZE=14, SHAPE_START=15, SHAPE_WAIT=16,
                ALLOC_FIND=17, ALLOC_COMMIT=18, RETIRE_BEGIN=19, RETIRE_FIND=20,
                RETIRE_FETCH=21, RETIRE_TEST=22, RETIRE_NEXT=23,
                CANON_READ=24, CANON_WRITE=25, RECLAIM_ALIASES=26;
@@ -76,7 +76,6 @@ module color_shape_detect #(
     reg [2:0] count;
     reg [9:0] bw;
     reg [8:0] bh;
-    reg [18:0] box_area;
     reg [63:0] candidate;
     reg [16:0] left_area,top_area,current_area;
     reg [8:0] left_minx,left_maxx,top_minx,top_maxx,current_minx,current_maxx;
@@ -118,7 +117,7 @@ module color_shape_detect #(
             in_use<=0;alloc_probe<=0;alloc_slot<=0;retire_index<=0;retire_root<=0;
             retire_y<=0;retire_maxy<=0;retire_area<=0;canon_x<=0;
             left_label<=0; left_root<=0; top_root<=0; pixel_color<=0;
-            overflow<=0; count<=0; bw<=0; bh<=0; box_area<=0; candidate<=0;
+            overflow<=0; count<=0; bw<=0; bh<=0; candidate<=0;
             left_seed<=0;top_seed<=0;current_seed<=0;shape_index<=0;
             left_area<=0;top_area<=0;current_area<=0;
             left_minx<=0;left_maxx<=0;top_minx<=0;top_maxx<=0;current_minx<=0;current_maxx<=0;
@@ -288,11 +287,11 @@ module color_shape_detect #(
                 MEASURE: begin
                     bw<={1'b0,current_maxx}-{1'b0,current_minx}+1'b1;
                     bh<={1'b0,current_maxy}-{1'b0,current_miny}+1'b1;
-                    state<=BOX_AREA;
+                    state<=CHECK_SIZE;
                 end
-                BOX_AREA: begin
+                CHECK_SIZE: begin
                     if(current_root && current_area>=MIN_AREA && bw>=MIN_WIDTH && bh>=MIN_HEIGHT) begin
-                        box_area<=bw*bh;state<=CLASSIFY;
+                        state<=CLASSIFY;
                     end else begin scan<=scan+1'b1;state<=SCAN;end
                 end
                 CLASSIFY: begin

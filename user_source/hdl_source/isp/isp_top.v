@@ -1,10 +1,7 @@
 module isp_top (
     input 			axi4s_video_aclk,
     input 			I_rst_n			,
-    input 			I_key_bin		,   // key1 (active low): cycles normal / binary / edge / cartoon
-    input wire      I_adjust_enable, // sw1 high enables k2/k3
-    input wire      I_key_threshold, // k2: raise binary threshold
-    input wire      I_key_edge,      // k3: raise Sobel threshold
+    input 			I_key_bin		,   // key1: normal / binary / edge / cartoon / gray
     input wire      I_key_detect,    // k4: toggle detection overlays
     input 			I_tlast			,
     input 			I_tuser			,
@@ -27,7 +24,6 @@ wire         m_aixs_tvalid;  //synthesis keep
   
   wire [ 95:0] m_aixs_tdata_96;  //synthesis keep 
 
-
   wire         awb_O_tlast;  //synthesis keep 
   wire         awb_O_tuser;  //synthesis keep 
   wire [ 95:0] awb_O_tdata;  //synthesis keep 
@@ -37,20 +33,19 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire gain_valid,gain_user,gain_last;
   wire [95:0] saturation_data;
   wire saturation_valid,saturation_user,saturation_last;
-  wire [1:0] saturation_mode;
+  wire [2:0] saturation_mode;
 
-  wire         awb_O_tuser_128;  //synthesis keep 
-  wire         awb_O_tvalid_128;  //synthesis keep 
-  wire [127:0] awb_O_tdata_128;  //synthesis keep 
+  wire         display_user_128;  //synthesis keep
+  wire         display_valid_128;  //synthesis keep
+  wire [127:0] display_data_128;  //synthesis keep
 
   wire         bin_O_tlast;
   wire         bin_O_tuser;
   wire [ 95:0] bin_O_tdata;
   wire         bin_O_tvalid;
 
-  wire [7:0] binary_threshold;
-  wire [10:0] edge_threshold;
-  wire [1:0] video_mode;
+  wire [2:0] video_mode;
+  wire [95:0] grayscale_data;
   wire [95:0] edge_O_tdata;
   wire [95:0] cartoon_O_tdata;
   wire edge_O_tlast, edge_O_tuser, edge_O_tvalid;
@@ -58,6 +53,8 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire osd_last, osd_user, osd_valid;
   wire [95:0] detection_data;
   wire detection_last, detection_user, detection_valid;
+  wire [95:0] logo_data;
+  wire logo_last,logo_user,logo_valid;
   wire reduced_valid;
   wire [1:0] reduced_color;
   wire [8:0] reduced_x;
@@ -77,23 +74,17 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire detection_key_pressed;
   reg detection_enabled;
   reg [95:0] normal_data_d1, binary_data_d1, normal_data_d2, binary_data_d2;
-  reg [1:0] video_mode_d1, video_mode_d2;
-  wire [95:0] processed_data = (video_mode_d2 == 2'd3) ? cartoon_O_tdata :
-                               (video_mode_d2 == 2'd2) ? edge_O_tdata :
-                               (video_mode_d2 == 2'd1) ? binary_data_d2 : normal_data_d2;
+  reg [2:0] video_mode_d1, video_mode_d2;
+  wire [95:0] processed_data = (video_mode_d2 == 3'd4) ? grayscale_data :
+                               (video_mode_d2 == 3'd3) ? cartoon_O_tdata :
+                               (video_mode_d2 == 3'd2) ? edge_O_tdata :
+                               (video_mode_d2 == 3'd1) ? binary_data_d2 : normal_data_d2;
   assign awb_O_tready = O_tready;
-  assign O_tdata  = awb_O_tdata_128;
-  assign O_tlast  = detection_last;
-  assign O_tuser  = awb_O_tuser_128    ;
-  assign O_tvalid = awb_O_tvalid_128   ;
-  
-  //assign m_aixs_tready = O_tready;
-  //assign O_tdata  = m_aixs_tdata;
-  //assign O_tlast  = m_aixs_tlast    ;
-  //assign O_tuser  = m_aixs_tuser    ;
-  //assign O_tvalid = m_aixs_tvalid   ;
- 
- 
+  assign O_tdata  = display_data_128;
+  assign O_tlast  = logo_last;
+  assign O_tuser  = display_user_128    ;
+  assign O_tvalid = display_valid_128   ;
+
 demosaic #(
     .IMG_HEIGHT          (720 ),  // 图像高度
     .IMG_WIDTH           (1280),  // 图像宽度
@@ -148,9 +139,9 @@ color_gain_rgb96 u_color_gain (
 
 // Post-AWB RGB gains feed display algorithms; detection uses ungained AWB RGB.
 binary_threshold_96 #(
-    .THRESHOLD(8'd64), .DYNAMIC_THRESHOLD(1)
+    .THRESHOLD(8'd64), .DYNAMIC_THRESHOLD(0)
 ) u_binary_threshold_96 (
-    .I_threshold(binary_threshold),
+    .I_threshold(8'd64),
     .I_tlast (gain_last),
     .I_tuser (gain_user),
     .I_tdata (gain_data),
@@ -164,9 +155,9 @@ binary_threshold_96 #(
 // All paths run continuously. Keep normal/binary data and mode aligned
 // with the edge module's two-cycle latency, including the first frame beat.
 edge_detect_96 #(
-    .IMG_WIDTH(1280), .IMG_HEIGHT(720), .EDGE_TH(11'd60), .DYNAMIC_THRESHOLD(1)
+    .IMG_WIDTH(1280), .IMG_HEIGHT(720), .EDGE_TH(11'd60), .DYNAMIC_THRESHOLD(0)
 ) u_edge_detect_96 (
-    .I_edge_th(edge_threshold),
+    .I_edge_th(11'd60),
     .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
     .I_tlast(gain_last), .I_tuser(gain_user),
     .I_tdata(gain_data), .I_tvalid(gain_valid),
@@ -182,12 +173,6 @@ cartoon_96 #(.IMG_WIDTH(1280), .IMG_HEIGHT(720)) u_cartoon_96 (
     .I_tdata(gain_data), .I_tvalid(gain_valid),
     .I_edge_data(edge_O_tdata), .O_tdata(cartoon_O_tdata)
 );
-key_isp_thresholds #(.BIN_RESET(8'd64), .EDGE_RESET(11'd60)) u_key_isp_thresholds (
-    .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
-    .I_adjust_enable(I_adjust_enable),
-    .I_key_threshold(I_key_threshold), .I_key_edge(I_key_edge),
-    .I_frame_start(gain_user), .O_threshold(binary_threshold), .O_edge_th(edge_threshold)
-);
 key_video_mode u_key_video_mode (
     .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
     .I_key(I_key_bin), .I_frame_start(gain_user), .O_mode(video_mode)
@@ -197,10 +182,10 @@ always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
     if (!I_rst_n) begin
         normal_data_d1 <= 96'd0;
         binary_data_d1 <= 96'd0;
-        video_mode_d1 <= 2'd0;
+        video_mode_d1 <= 3'd0;
         normal_data_d2 <= 96'd0;
         binary_data_d2 <= 96'd0;
-        video_mode_d2 <= 2'd0;
+        video_mode_d2 <= 3'd0;
     end else begin
         normal_data_d1 <= gain_data;
         binary_data_d1 <= bin_O_tdata;
@@ -210,6 +195,9 @@ always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
         video_mode_d2 <= video_mode_d1;
     end
 end
+grayscale_rgb96 u_grayscale (
+    .I_tdata(normal_data_d2),.O_tdata(grayscale_data)
+);
     // Display gains favor red and attenuate blue. Segment ungained AWB RGB
     // so display color tuning cannot change the detection thresholds.
     color_reduce_rgb96 u_color_reduce (
@@ -267,163 +255,23 @@ end
         .I_tdata(mask_osd_data), .I_tvalid(mask_osd_valid), .I_tuser(mask_osd_user), .I_tlast(mask_osd_last),
         .O_tdata(detection_data), .O_tvalid(detection_valid), .O_tuser(detection_user), .O_tlast(detection_last)
     );
+    logo_osd_rgb96 u_logo_osd (
+        .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),
+        .I_tdata(detection_data),.I_tvalid(detection_valid),.I_tuser(detection_user),.I_tlast(detection_last),
+        .O_tdata(logo_data),.O_tvalid(logo_valid),.O_tuser(logo_user),.O_tlast(logo_last)
+    );
     data_96bit_to_128bit u_data_96bit_to_128bit(
         .I_clk              ( axi4s_video_aclk  ),
         .I_rst_n            ( I_rst_n           ),
 	
-        .I_96b_frame_start  ( detection_user    ),
-        .I_96b_valid        ( detection_valid   ),
-        .I_96b_data         ( detection_data    ),
+        .I_96b_frame_start  ( logo_user    ),
+        .I_96b_valid        ( logo_valid   ),
+        .I_96b_data         ( logo_data    ),
 	
-        .O_128b_frame_start ( awb_O_tuser_128  	),
-        .O_128b_valid       ( awb_O_tvalid_128 	),
-        .O_128b_data        ( awb_O_tdata_128  	)
+        .O_128b_frame_start ( display_user_128  	),
+        .O_128b_valid       ( display_valid_128 	),
+        .O_128b_data        ( display_data_128  	)
     );
 
-
-
-//data96_128 u_data96_128 (
-//    .I_tdata(awb_O_tdata),
-//    .O_tdata(awb_O_tdata_128)
-//);
 	
-endmodule
-
-// Four-pixel RGB888 gamma stage.  The 16-segment curve approximates
-// y = 255 * (x / 255)^0.7.  It lifts shadows and mid-tones while preserving
-// black and white and adds one registered pipeline cycle.
-module axis_gamma_rgb96 (
-    input  wire        I_clk,
-    input  wire        I_rst_n,
-    input  wire        I_tlast,
-    input  wire        I_tuser,
-    input  wire [95:0] I_tdata,
-    input  wire        I_tvalid,
-    output reg         O_tlast,
-    output reg         O_tuser,
-    output reg  [95:0] O_tdata,
-    output reg         O_tvalid
-);
-
-    function [7:0] gamma07;
-        input [7:0] value;
-        reg [7:0] base;
-        reg [7:0] delta;
-        reg [11:0] interpolation;
-        begin
-            case (value[7:4])
-                4'h0: begin base = 8'd0;   delta = 8'd37; end
-                4'h1: begin base = 8'd37;  delta = 8'd23; end
-                4'h2: begin base = 8'd60;  delta = 8'd19; end
-                4'h3: begin base = 8'd79;  delta = 8'd18; end
-                4'h4: begin base = 8'd97;  delta = 8'd16; end
-                4'h5: begin base = 8'd113; delta = 8'd16; end
-                4'h6: begin base = 8'd129; delta = 8'd14; end
-                4'h7: begin base = 8'd143; delta = 8'd14; end
-                4'h8: begin base = 8'd157; delta = 8'd14; end
-                4'h9: begin base = 8'd171; delta = 8'd13; end
-                4'ha: begin base = 8'd184; delta = 8'd13; end
-                4'hb: begin base = 8'd197; delta = 8'd12; end
-                4'hc: begin base = 8'd209; delta = 8'd12; end
-                4'hd: begin base = 8'd221; delta = 8'd12; end
-                4'he: begin base = 8'd233; delta = 8'd11; end
-                default: begin base = 8'd244; delta = 8'd11; end
-            endcase
-
-            interpolation = delta * value[3:0] + 8;
-            if (value == 8'hff)
-                gamma07 = 8'hff;
-            else
-                gamma07 = base + (interpolation >> 4);
-        end
-    endfunction
-
-    always @(posedge I_clk or negedge I_rst_n) begin
-        if (!I_rst_n) begin
-            O_tlast  <= 1'b0;
-            O_tuser  <= 1'b0;
-            O_tdata  <= 96'd0;
-            O_tvalid <= 1'b0;
-        end else begin
-            O_tlast  <= I_tlast;
-            O_tuser  <= I_tuser;
-            O_tvalid <= I_tvalid;
-            if (I_tvalid) begin
-                O_tdata <= {
-                    gamma07(I_tdata[95:88]), gamma07(I_tdata[87:80]), gamma07(I_tdata[79:72]),
-                    gamma07(I_tdata[71:64]), gamma07(I_tdata[63:56]), gamma07(I_tdata[55:48]),
-                    gamma07(I_tdata[47:40]), gamma07(I_tdata[39:32]), gamma07(I_tdata[31:24]),
-                    gamma07(I_tdata[23:16]), gamma07(I_tdata[15:8]),  gamma07(I_tdata[7:0])
-                };
-            end else begin
-                O_tdata <= 96'd0;
-            end
-        end
-    end
-
-endmodule
-
-
-// Centre crop for the ISP's four-pixel-wide RGB888 stream.  Frame start is
-// intentionally forwarded at the original frame boundary so video_in can
-// reset its asynchronous FIFO before the first selected row arrives.
-module axis_crop_rgb96 #(
-    parameter integer IN_WIDTH   = 1792,
-    parameter integer IN_HEIGHT  = 1080,
-    parameter integer OUT_WIDTH  = 1600,
-    parameter integer OUT_HEIGHT = 900,
-    parameter integer X_START    = 96,
-    parameter integer Y_START    = 90
-)(
-    input  wire        I_clk,
-    input  wire        I_rst_n,
-    input  wire        I_tlast,
-    input  wire        I_tuser,
-    input  wire [95:0] I_tdata,
-    input  wire        I_tvalid,
-    output wire        O_tlast,
-    output wire        O_tuser,
-    output wire [95:0] O_tdata,
-    output wire        O_tvalid
-);
-
-    localparam integer X_START_BEAT = X_START / 4;
-    localparam integer OUT_BEATS    = OUT_WIDTH / 4;
-    localparam integer X_END_BEAT   = X_START_BEAT + OUT_BEATS;
-
-    reg [9:0]  S_hcnt;
-    reg [10:0] S_vcnt;
-
-    wire [9:0]  S_current_h = I_tuser ? 10'd0 : S_hcnt;
-    wire [10:0] S_current_v = I_tuser ? 11'd0 : S_vcnt;
-    wire S_inside = (S_current_h >= X_START_BEAT) &&
-                    (S_current_h < X_END_BEAT) &&
-                    (S_current_v >= Y_START) &&
-                    (S_current_v < (Y_START + OUT_HEIGHT));
-
-    assign O_tdata  = I_tdata;
-    assign O_tvalid = I_tvalid && S_inside;
-    assign O_tlast  = O_tvalid && (S_current_h == (X_END_BEAT - 1));
-    assign O_tuser  = I_tuser;
-
-    always @(posedge I_clk or negedge I_rst_n) begin
-        if(!I_rst_n) begin
-            S_hcnt <= 10'd0;
-            S_vcnt <= 11'd0;
-        end
-        else if(I_tuser) begin
-            S_hcnt <= (I_tvalid && !I_tlast) ? 10'd1 : 10'd0;
-            S_vcnt <= (I_tvalid && I_tlast) ? 11'd1 : 11'd0;
-        end
-        else if(I_tvalid) begin
-            if(I_tlast) begin
-                S_hcnt <= 10'd0;
-                S_vcnt <= (S_vcnt == IN_HEIGHT - 1) ? 11'd0 : S_vcnt + 1'b1;
-            end
-            else begin
-                S_hcnt <= S_hcnt + 1'b1;
-            end
-        end
-    end
-
 endmodule

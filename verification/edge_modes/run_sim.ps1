@@ -9,6 +9,9 @@ try {
     & (Join-Path $ModelSimBin 'vlog.exe') -work $library -sv `
         user_source/hdl_source/isp/color_gain_rgb96.v `
         user_source/hdl_source/isp/saturation_rgb96.v `
+        user_source/hdl_source/isp/grayscale_rgb96.v `
+        user_source/hdl_source/isp/anlogic_logo_words.v `
+        user_source/hdl_source/isp/logo_osd_rgb96.v `
         user_source/hdl_source/isp/color_reduce_rgb96.v `
         user_source/hdl_source/isp/color_shape_detect.v `
         user_source/hdl_source/isp/shape_contour_classifier.v `
@@ -19,7 +22,6 @@ try {
         user_source/hdl_source/isp/mode_osd_rgb96.v `
         user_source/hdl_source/isp/cartoon_96.v `
         user_source/hdl_source/isp/edge_detect_96.v `
-        user_source/hdl_source/key_isp_thresholds.v `
         user_source/hdl_source/key_video_mode.v `
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `
@@ -43,21 +45,15 @@ try {
     if (!(Select-String -Quiet -LiteralPath verification/edge_modes/cartoon_simulation.log -Pattern 'PASS: cartoon color quantization')) {
         throw 'Cartoon simulation did not reach PASS'
     }
-    & (Join-Path $ModelSimBin 'vlog.exe') -work $library -sv verification/edge_modes/tb_runtime_thresholds.sv
-    if ($LASTEXITCODE -ne 0) { throw 'Threshold vlog failed' }
-    & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $library tb_runtime_thresholds `
-        -do 'onerror {quit -code 1}; run -all; quit -code 0' `
-        -l verification/edge_modes/threshold_simulation.log
-    if ($LASTEXITCODE -ne 0) { throw 'Threshold vsim failed' }
-    if (!(Select-String -Quiet -LiteralPath verification/edge_modes/threshold_simulation.log -Pattern 'PASS: runtime thresholds')) {
-        throw 'Threshold simulation did not reach PASS'
-    }
     $ispLibrary = 'verification/edge_modes/work_isp'
     & (Join-Path $ModelSimBin 'vlib.exe') $ispLibrary
     if ($LASTEXITCODE -ne 0) { throw 'ISP vlib failed' }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLibrary -sv `
         user_source/hdl_source/isp/color_gain_rgb96.v `
         user_source/hdl_source/isp/saturation_rgb96.v `
+        user_source/hdl_source/isp/grayscale_rgb96.v `
+        user_source/hdl_source/isp/anlogic_logo_words.v `
+        user_source/hdl_source/isp/logo_osd_rgb96.v `
         user_source/hdl_source/isp/color_reduce_rgb96.v `
         user_source/hdl_source/isp/color_shape_detect.v `
         user_source/hdl_source/isp/shape_contour_classifier.v `
@@ -68,7 +64,6 @@ try {
         user_source/hdl_source/isp/mode_osd_rgb96.v `
         user_source/hdl_source/isp/cartoon_96.v `
         user_source/hdl_source/isp/edge_detect_96.v `
-        user_source/hdl_source/key_isp_thresholds.v `
         user_source/hdl_source/key_video_mode.v `
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `
@@ -81,7 +76,7 @@ try {
         -do 'onerror {quit -code 1}; run -all; quit -code 0' `
         -l verification/edge_modes/isp_simulation.log
     if ($LASTEXITCODE -ne 0) { throw 'ISP vsim failed' }
-    if (!(Select-String -Quiet -LiteralPath verification/edge_modes/isp_simulation.log -Pattern 'PASS: ISP normal/binary/edge/cartoon mux')) {
+    if (!(Select-String -Quiet -LiteralPath verification/edge_modes/isp_simulation.log -Pattern 'PASS: ISP normal/binary/edge/cartoon/gray mux')) {
         throw 'ISP simulation did not reach PASS'
     }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $library -sv verification/edge_modes/tb_mode_osd.sv

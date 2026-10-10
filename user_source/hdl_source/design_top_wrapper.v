@@ -10,7 +10,7 @@ module design_top_wrapper (
     output wire       O_cam_rst,
       
     inout wire [3:0]  I_button,
-    input wire       I_sw1, // high enables k2/k3 threshold adjustment (A4)
+    input wire       I_sw1, // reserved switch input (A4); gain keys are always enabled
 
     output wire       O_screen_pwm,
     output wire       O_tmds_ch0_p,
@@ -547,7 +547,7 @@ module design_top_wrapper (
 
   
   // 按键 KEY0~KEY3（D5/A9/B9/C7，低有效）：
-  // KEY0 给二值化切换用；KEY1 增益-、KEY2 增益+ 接回 ae_set 原来的 I_btn[2]/I_btn[3]
+  // KEY0 切换显示模式；KEY1 增益-、KEY2 增益+，不受SW1或显示模式限制
   ae_set u_ae_set (
       .I_clk(S_24m_clk),
       .I_rst(~S_rst_n),
@@ -705,9 +705,6 @@ isp_top u_isp_top (
 .axi4s_video_aclk(S_csi_rx_clk),
 .I_rst_n         (S_rst_n),
 .I_key_bin       (I_button[0]),   // key1: cycle normal / binary / edge / cartoon
-.I_adjust_enable (I_sw1),
-.I_key_threshold (I_button[1]),   // k2: binary threshold +16
-.I_key_edge      (I_button[2]),   // k3: edge threshold +20
 .I_key_detect    (I_button[3]),   // k4: toggle detection overlays
 .I_tlast         (S_raw_tlast	),
 .I_tuser         (S_raw_tuser	),

@@ -26,14 +26,14 @@ module tb_isp_modes;
     reg clk=0; always #5 clk=~clk;
     reg rst_n=0, valid=0, user=0, last=0;
     reg [39:0] data=0;
-    reg [1:0] requested=0;
-    isp_top dut (.axi4s_video_aclk(clk), .I_rst_n(rst_n), .I_key_bin(1'b1), .I_key_detect(1'b1), .I_adjust_enable(1'b0), .I_key_threshold(1'b1), .I_key_edge(1'b1),
+    reg [2:0] requested=0;
+    isp_top dut (.axi4s_video_aclk(clk), .I_rst_n(rst_n), .I_key_bin(1'b1), .I_key_detect(1'b1),
         .I_tlast(last), .I_tuser(user), .I_tdata(data), .I_tvalid(valid), .I_tdest(10'd0),
         .O_tready(1'b1), .O_tdata(), .O_tlast(), .O_tuser(), .O_tvalid(), .I_tready());
     reg [95:0] expected_d1=0, expected_d2=0;
     reg valid_d1=0, valid_d2=0, user_d1=0, user_d2=0;
-    reg [1:0] active_mode=0;
-    reg [1:0] reference_mode_d1=0, reference_mode_d2=0;
+    reg [2:0] active_mode=0;
+    reg [2:0] reference_mode_d1=0, reference_mode_d2=0;
     reg [7:0] luminance;
     reg [95:0] wanted;
     reg [23:0] gained_rgb=0,gained_rgb_d1=0;
@@ -57,7 +57,7 @@ module tb_isp_modes;
                dut.gain_user!==gained_user || dut.gain_last!==gained_last) $fatal(1,"ISP gain integration");
         end
     end
-    integer frame, beat, row=0, group_index=0;
+    integer frame, beat, row=0, group_index=0,gray_value;
     always @(posedge clk) begin
         if (!rst_n) begin
             expected_d1 <= 0; expected_d2 <= 0;
@@ -72,6 +72,11 @@ module tb_isp_modes;
                 1: wanted = luminance >= 64 ? {96{1'b1}} : 96'd0;
                 2: wanted = 0; // two rows: Sobel windows are masked
                 3: wanted = (row >= 1 && group_index > 0) ? {4{24'h55aaaa}} : 96'd0;
+                4: begin
+                    gray_value=(gained_rgb[23:16]+2*gained_rgb[15:8]+gained_rgb[7:0])/4;
+                    wanted={12{gray_value[7:0]}};
+                end
+                default: wanted=96'd0;
             endcase
             expected_d1 <= wanted; expected_d2 <= expected_d1;
             reference_mode_d1 <= active_mode; reference_mode_d2 <= reference_mode_d1;
@@ -94,16 +99,17 @@ module tb_isp_modes;
             case(c)
                 8'h41: bitmap=256'h000000001c0014001400140036003e0022002200000000000000000000000000;
                 8'h42: bitmap=256'h000000003e00330033003e003300330033003e00000000000000000000000000;
-                8'h43: bitmap=256'h0000000003f00c0c18003000300030003000300018000c0c03f0000000000000;
+                8'h43: bitmap=256'h000000001e003300300030003000300033001e00000000000000000000000000;
                 8'h45: bitmap=256'h000000003e00300030003e003000300030003e00000000000000000000000000;
+                8'h47: bitmap=256'h000000001c003200600060006e00660036001e00000000000000000000000000;
                 8'h49: bitmap=256'h000000001e000c000c000c000c000c000c001e00000000000000000000000000;
                 8'h4c: bitmap=256'h0000000030003000300030003000300030003e00000000000000000000000000;
                 8'h4d: bitmap=256'h0000000036003600360036002a002a0022002200000000000000000000000000;
-                8'h4e: bitmap=256'h00000000300c380c3c0c360c330c318c30cc306c303c301c300c000000000000;
+                8'h4e: bitmap=256'h0000000033003b003b0037003300330033003300000000000000000000000000;
                 8'h4f: bitmap=256'h000000001e003200630063006300630036003c00000000000000000000000000;
                 8'h52: bitmap=256'h000000003e003300330033003c00360036003200000000000000000000000000;
                 8'h53: bitmap=256'h000000001e00300030003c000f00030003003e00000000000000000000000000;
-                8'h54: bitmap=256'h000000003ffc03c003c003c003c003c003c003c003c003c003c0000000000000;
+                8'h54: bitmap=256'h000000003f000c000c000c000c000c000c000c00000000000000000000000000;
                 8'h59: bitmap=256'h00000000318013001b001e000c000c000c000c00000000000000000000000000;
                 default: bitmap=0;
             endcase
@@ -126,6 +132,7 @@ module tb_isp_modes;
             case(dut.saturation_mode)
                 0: osd_text="NORMAL "; 1: osd_text="BINARY ";
                 2: osd_text="SOBEL  "; 3: osd_text="CARTOON";
+                4: osd_text="GRAY   ";
             endcase
             for(osd_lane=0;osd_lane<4;osd_lane=osd_lane+1) begin
                 osd_px=osd_x+osd_lane;
@@ -150,8 +157,8 @@ module tb_isp_modes;
         force dut.u_key_video_mode.requested_mode = requested;
         repeat(4) @(negedge clk); rst_n=1;
         // Continuous beats and adjacent frame boundaries exercise mode/data alignment.
-        for(frame=0; frame<4; frame=frame+1) begin
-            requested = (frame+1)%4;
+        for(frame=0; frame<5; frame=frame+1) begin
+            requested = (frame+1)%5;
             for(beat=0; beat<32; beat=beat+1) begin
                 @(negedge clk); valid=1; user=(beat==0); last=(beat%16==15);
                 data = frame==2 ? 40'h00638cd3 : (beat%2 ? 40'h00f0d0e0 : 40'h00103020);
@@ -165,7 +172,7 @@ module tb_isp_modes;
         end
         @(negedge clk); valid=0; user=0; last=0;
         repeat(4) @(negedge clk);
-        $display("PASS: ISP normal/binary/edge/cartoon mux, continuous beats and frame-boundary latency alignment");
+        $display("PASS: ISP normal/binary/edge/cartoon/gray mux, continuous beats and frame-boundary latency alignment");
         $finish;
     end
 endmodule
