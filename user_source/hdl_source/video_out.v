@@ -17,7 +17,10 @@ module video_out (
     input wire        I_dsi_clk,
     input wire        I_video_vsync,
     input wire        I_video_rd_en,  
-    output reg[23:0]  O_vdieo_data
+    output reg[23:0]  O_vdieo_data,
+    output wire      O_latency_start,
+    output wire [1:0] O_latency_slot,
+    output reg       O_latency_underflow
 );
 
     reg         S_fifo_rst;     
@@ -53,6 +56,17 @@ module video_out (
     end
 
     assign S_video_frame_start = ~S_video_vsync_3d & S_video_vsync_2d;
+    assign O_latency_start = S_video_frame_start;
+    assign O_latency_slot = I_video_out_rp;
+    reg latency_vsync_d;
+    always @(posedge I_dsi_clk or negedge I_rst_n) begin
+        if(!I_rst_n) begin latency_vsync_d<=0;O_latency_underflow<=0;end
+        else begin
+            latency_vsync_d<=I_video_vsync;
+            if(I_video_vsync && !latency_vsync_d) O_latency_underflow<=0;
+            else if(S_fifo_rd_en && S_fifo_emtpy) O_latency_underflow<=1;
+        end
+    end
 
 
     always @(posedge I_ddr_clk or negedge I_rst_n) begin

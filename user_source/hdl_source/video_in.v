@@ -15,6 +15,9 @@ module video_in (
     input wire         I_video_out_rd_busy,
     output wire        O_video_in_wr_busy,
     output reg[1:0]    O_video_out_rp,     ///读指针
+    output wire        O_latency_start,
+    output wire [1:0]  O_latency_slot,
+    output reg         O_latency_overflow,
 
     output reg         O_ddr_user_wr_en,
     output reg[24:0]   O_ddr_user_addr,
@@ -23,6 +26,10 @@ module video_in (
 );
 
     wire        S_fifo_rst;
+    wire        latency_fifo_full;
+    always @(posedge I_camera_clk or negedge I_rst_n)
+        if(!I_rst_n) O_latency_overflow<=0;
+        else if(I_camera_valid && latency_fifo_full && !S_fifo_rst) O_latency_overflow<=1;
     reg         S_camera_frame_start_extend; ///脉冲展宽，同步到ddr_clk时钟域
     reg[3:0]    S_extend_cnt;
     reg         S_camera_frame_start_extend_1d;
@@ -55,7 +62,7 @@ module video_in (
         .we         ( I_camera_valid     ),
         .di         ( I_camera_data      ),
         .afull      (),
-        .full_flag  (),
+        .full_flag  (latency_fifo_full),
         .wrusedw    (),
  
         .clkr       ( I_ddr_clk          ),
@@ -96,6 +103,9 @@ module video_in (
     end
 
     assign S_frame_start = ~S_camera_frame_start_extend_3d & S_camera_frame_start_extend_2d;
+    // Observe the same pre-increment pointer used by the write-address block.
+    assign O_latency_start = S_frame_start;
+    assign O_latency_slot = I_mipi_rx_error ? S_video_in_wp-2'd1 : S_video_in_wp;
 
 	/*
 		如果前一帧图像有误少行了，那么地址回退为之前的，覆盖有问题的那帧图像

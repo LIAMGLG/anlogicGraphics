@@ -1,5 +1,6 @@
 // 16x16 character cells, bit 15 at the left; row zero at the top.
-// Based on the supplied lab_ex3_osd font. C/T/N/4 use matching 8-row glyphs.
+// Based on the supplied lab_ex3_osd font. C/T/N use 8-row letter glyphs;
+// all digits, including 4, use the same 12-row numeric height and baseline.
 module osd_char_lib (
     input wire [7:0] I_char,
     input wire [3:0] I_row,
@@ -40,7 +41,7 @@ module osd_char_lib (
             8'h31: bitmap=256'h0000000c000c000c000c000c00000000000c000c000c000c000c000000000000;
             8'h32: bitmap=256'h00001ff81ff8000c000c000c1ff81ff83000300030001ff81ff8000000000000;
             8'h33: bitmap=256'h00001ff81ff8000c000c000c1ff81ff8000c000c000c1ff81ff8000000000000;
-            8'h34: bitmap=256'h0000000006000e00160026003f00060006000600000000000000000000000000;
+            8'h34: bitmap=256'h0000300c300c300c300c300c3ffc3ffc000c000c000c000c000c000000000000;
             8'h35: bitmap=256'h00001ff81ff83000300030001ff81ff8000c000c000c1ff81ff8000000000000;
             8'h36: bitmap=256'h00001ff81ff83000300030001ff81ff8300c300c300c1ff81ff8000000000000;
             8'h37: bitmap=256'h00001ff81ff8000c000c000c00000000000c000c000c000c000c000000000000;

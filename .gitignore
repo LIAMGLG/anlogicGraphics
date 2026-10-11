@@ -1,0 +1,7 @@
+# Local TD runs and session files. Already tracked historical outputs remain tracked.
+/td_project/*_Runs/
+/td_project/log/
+/td_project/.lock.f
+/td_*.log
+/td_*.logw
+/transcript

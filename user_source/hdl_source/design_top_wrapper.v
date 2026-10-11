@@ -162,6 +162,11 @@ module design_top_wrapper (
     wire[23:0]  S_hdmi_out_data;
 
     wire[23:0]  S_video_rd_data;
+    wire S_latency_write_start,S_latency_read_start;
+    wire [1:0] S_latency_write_slot,S_latency_read_slot;
+    wire S_latency_underflow,S_latency_overflow;
+    wire S_latency_vs,S_latency_hs,S_latency_de;
+    wire [23:0] S_latency_rgb;
     reg         S_dbg_raw_seen;
     reg         S_dbg_isp_seen;
     reg         S_dbg_ddr_wr_seen;
@@ -734,6 +739,9 @@ isp_top u_isp_top (
         .I_video_out_rd_busy  ( S_video_out_rd_busy   ),
         .O_video_in_wr_busy   ( S_video_in_wr_busy    ),
         .O_video_out_rp       ( S_video_out_rp        ),
+        .O_latency_start      ( S_latency_write_start ),
+        .O_latency_slot       ( S_latency_write_slot  ),
+        .O_latency_overflow   ( S_latency_overflow    ),
 
         .O_ddr_user_wr_en     ( S_vi_ddr_wr_en        ),
         .O_ddr_user_addr      ( S_vi_ddr_wr_addr      ),
@@ -772,7 +780,10 @@ isp_top u_isp_top (
         .I_dsi_clk           ( S_hdmi_pixel_clk     ),
         .I_video_vsync       ( S_video_out_vsync    ),
         .I_video_rd_en       ( S_hdmi_window_rd_en  ),
-        .O_vdieo_data        ( S_video_rd_data      )
+        .O_vdieo_data        ( S_video_rd_data      ),
+        .O_latency_start    ( S_latency_read_start ),
+        .O_latency_slot     ( S_latency_read_slot  ),
+        .O_latency_underflow( S_latency_underflow  )
     );
 
 
@@ -886,6 +897,19 @@ isp_top u_isp_top (
         .O_hdmi_data     ( S_hdmi_out_data    )
     );
 
+    latency_system u_latency (
+        .I_rst_n(S_rst_n),.I_sys_clk(I_sys_clk),.I_csi_clk(S_csi_rx_clk),
+        .I_ddr_clk(S_ddr_clk),.I_pixel_clk(S_hdmi_pixel_clk),
+        .I_csi_start(S_csi_frame_start),.I_raw_start(S_raw_tuser),.I_isp_start(S_ISP_O_tuser),
+        .I_overflow(S_latency_overflow),
+        .I_write_start(S_latency_write_start),.I_write_slot(S_latency_write_slot),
+        .I_commit(S_mc_app_wdf_wren),.I_commit_addr(S_mc_app_addr),
+        .I_read_start(S_latency_read_start),.I_read_slot(S_latency_read_slot),
+        .I_underflow(S_latency_underflow),
+        .I_vs(S_hdmi_out_vsync),.I_hs(S_hdmi_out_hsync),.I_de(S_hdmi_out_de),.I_rgb(S_hdmi_out_data),
+        .O_vs(S_latency_vs),.O_hs(S_latency_hs),.O_de(S_latency_de),.O_rgb(S_latency_rgb)
+    );
+
     hdmi_tx u_hdmi_tx(
         .I_pixel_clk        ( S_hdmi_pixel_clk  ),
         .I_serial_clk       ( S_hdmi_serial_clk ),
@@ -895,13 +919,13 @@ isp_top u_isp_top (
         .O_edid_read_valid  (                   ),
         .O_edid_read_data   (                   ),
         .I_video_rgb_enable ( 1'b1              ),
-        .I_video_in_vs      ( S_hdmi_out_vsync  ),
-        .I_video_in_de      ( S_hdmi_out_de     ),
+        .I_video_in_vs      ( S_latency_vs      ),
+        .I_video_in_de      ( S_latency_de      ),
         .I_video_in_user    ( 1'b0              ),
         .I_video_in_valid   ( 1'b0              ),
         .I_video_in_last    ( 1'b0              ),
         .O_video_in_ready   (                   ),
-        .I_video_in_data    ( S_hdmi_out_data   ),
+        .I_video_in_data    ( S_latency_rgb     ),
         .I_audio_valid      ( 1'b0              ),
         .I_audio_left_data  ( 24'd0             ),
         .I_audio_right_data ( 24'd0             ),

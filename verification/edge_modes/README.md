@@ -1,6 +1,6 @@
 # 图像显示与模式轮换
 
-更新：2026-10-10。当前为五种显示模式；目标检测说明见 [检测 README](../shape_detection/README.md)。
+更新：2026-10-11。当前为五种显示模式；目标检测说明见 [检测 README](../shape_detection/README.md)，新增采集到HDMI延迟可视化见 [延迟 README](../video_latency/README.md)。
 
 ## 模式与操作
 
@@ -27,11 +27,12 @@ sw1保留输入，当前无功能。k1/k4消抖且长按只触发一次。
 - 模式选择后饱和度1.25：近似Y=(R+2G+B)/4，按Y+1.25×(C−Y)调整并限制到0～255。
   灰度及黑白图像保持不变，文字/框/Logo在它之后叠加。
 - 模式名称：x=16..239、y=16..47，16×16字库放大两倍。
-  字库使用紧凑位图，C/T/N/4统一为8行高、最多6列宽。
+  字库使用紧凑位图，C/T/N与其他字母统一为8行高、最多6列宽；数字4已与其他数字统一为12行高度和底线。
 - 安路Logo：右下角x=1104..1263、y=608..703，160×96，透明像素保留视频。
   图案来自 `user_source/hdl_source/anlogic_logo_rom.v`，原文件不变。
-  `anlogic_logo_words.v`打包四个含不透明标志的像素，`logo_osd_rgb96.v`负责叠加。
+  `anlogic_logo_words.v`每组四像素存8位索引，00透明/01红/10深蓝/11白，同步读取后组合解码回原100位像素接口；`logo_osd_rgb96.v`负责叠加，两拍延迟不变。原图过渡色归并到三种主色，透明轮廓保持。存储量减少92%，用户TD报告确认20→2块ERAM。生成及验证见 [Logo README](../logo/README.md)。
 - k4只切换检测叠加；模式名称和Logo始终显示。
+- DDR读取和hdmi_mixer后新增始终开启的左下角CAP/DISP/AGE/LAT面板，x=16..367、y=608..671；无效测量显示WAIT。该输出级增加一拍并同步延迟RGB/DE/HS/VS，不改变ISP内各级延迟。
 - 检测读取AWB原RGB，独立于显示模式、增益和饱和度。
 
 显示主连接在 `user_source/hdl_source/isp/isp_top.v`，算法、OSD和Logo均为独立模块，已加入TD工程清单。
@@ -63,5 +64,8 @@ powershell -ExecutionPolicy Bypass -File verification/edge_modes/run_sim.ps1
 | tb_mode_osd | 五种名称、字库像素、坐标和控制延迟 |
 | tb_rgb_gain | 全256输入值、四像素位置、饱和与复位 |
 
-**当前五模式、字库和透明Logo版本尚未完成仿真及TD实现。**历史测试结果不能直接用于当前源码，现有测试也不等于完整Logo验证。真实摄像头、AWB算术、DDR和HDMI不由上述替身测试覆盖。
-TD Run由用户完成；重新加载 `td_project/camera_to_dsi_display.al`，检查Logo ROM推断、资源容量与最终时序后生成bit。
+用户2026-10-11 12:38完成当前三色Logo版本TD实现：Slice 90.32%、ERAM 73/108、DSP 26/40，Setup +0.155 ns、Hold +0.020 ns；详见 [资源 README](../resources/README.md)。
+
+**当前完整五模式链路尚未重跑全套回归。**三色Logo独立ModelSim测试已通过15360像素、透明轮廓、四像素顺序、两帧720p、控制对齐及复位；数字4的高度/底线由延迟单元测试覆盖。历史结果不能直接作为当前全链路验证，真实摄像头、AWB算术、DDR和HDMI不由上述替身测试覆盖。
+
+用户反馈画面连续更新；五模式及三色Logo的逐项实板确认仍待完成。后续TD Run和下载由用户操作；CDC约束待核对事项见 [延迟 README](../video_latency/README.md)。
