@@ -15,3 +15,9 @@ set_clock_groups -asynchronous \
     -group [get_clocks {mipi_rx_ck_pad MIPI_RX_BYTE_CLK}] \
     -group [get_clocks {sys_clk_50m pll_clk_100m pll_clk_24m HDMI_PIXEL_CLK HDMI_SERIAL_CLK}] \
     -group [get_clocks {u_ph1p35_324_ddr_wrapper/u_ddr2/ddr_clk u_ph1p35_324_ddr_wrapper/u_ddr2/usr_clk}]
+
+# Bundled-data mailbox: only incoming toggles at the first synchronizer stage.
+# Keep ack1->ack2, req1->req2 and held payload paths timed.
+# get_regs uses RTL Q-net names, not mapped *_reg_syn_*.ima pin names.
+set_false_path -from [get_clocks {HDMI_PIXEL_CLK}] -to [get_regs {u_latency/u_pixel_time/ack1}]
+set_false_path -from [get_clocks {sys_clk_50m}] -to [get_regs {u_latency/u_pixel_time/req1}]
