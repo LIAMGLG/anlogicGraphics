@@ -60,6 +60,7 @@ Logo由RGB888加透明标记改为三色加透明的2位索引，ROM从384000 bi
 ```powershell
 powershell -ExecutionPolicy Bypass -File verification/video_latency/run_sim.ps1
 powershell -ExecutionPolicy Bypass -File verification/logo/run_sim.ps1
+powershell -ExecutionPolicy Bypass -File verification/resources/run_sim.ps1
 powershell -ExecutionPolicy Bypass -File verification/edge_modes/run_sim.ps1
 powershell -ExecutionPolicy Bypass -File verification/shape_detection/run_sim.ps1
 ```

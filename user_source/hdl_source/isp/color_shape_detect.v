@@ -29,7 +29,8 @@ module color_shape_detect #(
                FETCH=12, MEASURE=13, CHECK_SIZE=14, SHAPE_START=15, SHAPE_WAIT=16,
                ALLOC_FIND=17, ALLOC_COMMIT=18, RETIRE_BEGIN=19, RETIRE_FIND=20,
                RETIRE_FETCH=21, RETIRE_TEST=22, RETIRE_NEXT=23,
-               CANON_READ=24, CANON_WRITE=25, RECLAIM_ALIASES=26;
+               CANON_READ=24, CANON_WRITE=25, RECLAIM_ALIASES=26,
+               FETCH_LEFT=27, FETCH_TOP=28, RETIRE_LATCH=29, SCAN_LATCH=30;
     reg [4:0] state;
     reg capturing;
     reg [1:0] mask [0:WIDTH*HEIGHT-1];
@@ -38,10 +39,15 @@ module color_shape_detect #(
     reg [LABEL_BITS-1:0] top_q;
     reg [LABEL_BITS-1:0] parent [0:LABELS-1];
     reg [1:0] color [0:LABELS-1];
-    reg [16:0] area [0:LABELS-1];
-    reg [8:0] xmin [0:LABELS-1], xmax [0:LABELS-1];
-    reg [7:0] ymin [0:LABELS-1], ymax [0:LABELS-1];
-    reg [8:0] seedx [0:LABELS-1];
+    // Geometry has one synchronous read and one write port. Small parent/color
+    // tables remain registers for union/find; wide statistics never use a
+    // multi-port asynchronous register mux. No reset on RAM: CLEAR initializes it.
+    // {area[16:0], xmin[8:0], xmax[8:0], ymin[7:0], ymax[7:0], seedx[8:0]}
+    reg [59:0] label_stats [0:LABELS-1];
+    reg [59:0] stats_q;
+    reg stats_we;
+    reg [LABEL_BITS-1:0] stats_read_address,stats_write_address;
+    reg [59:0] stats_write_data;
     reg [LABEL_BITS:0] allocated, scan;
     reg [LABELS-1:0] in_use;
     reg [LABEL_BITS:0] alloc_probe,retire_index;
@@ -92,6 +98,48 @@ module color_shape_detect #(
     wire [15:0] capture_address=I_y*WIDTH+I_x;
     wire [15:0] mask_read_address=state==READ_PIXEL ? address : shape_address;
     wire mask_read_enable=state==READ_PIXEL || state==SHAPE_START || state==SHAPE_WAIT;
+    always @(*) begin
+        stats_read_address=0;
+        case(state)
+            FETCH:stats_read_address=left_root;
+            FETCH_LEFT:stats_read_address=top_root;
+            RETIRE_FETCH:stats_read_address=retire_root;
+            SCAN:stats_read_address=scan[LABEL_BITS-1:0];
+            default:stats_read_address=0;
+        endcase
+        stats_we=0;stats_write_address=0;stats_write_data=0;
+        case(state)
+            CLEAR:begin stats_we=1;stats_write_address=scan[LABEL_BITS-1:0];end
+            ALLOC_COMMIT:begin
+                stats_we=1;stats_write_address=alloc_slot;
+                stats_write_data={17'd1,x,x,y,y,x};
+            end
+            APPLY:if(pixel_color!=0) begin
+                if(left_root!=0) begin
+                    stats_we=1;stats_write_address=left_root;
+                    if(top_root!=0 && top_root!=left_root)
+                        stats_write_data={left_area+top_area+17'd1,
+                            (left_minx<top_minx ? left_minx : top_minx),
+                            (x>top_maxx ? (x>left_maxx ? x : left_maxx) :
+                                (top_maxx>left_maxx ? top_maxx : left_maxx)),
+                            (left_miny<top_miny ? left_miny : top_miny),y,
+                            (left_miny<top_miny ? left_seed :
+                                (top_miny<left_miny ? top_seed : (left_seed<top_seed ? left_seed : top_seed)))};
+                    else stats_write_data={left_area+17'd1,left_minx,
+                        (x>left_maxx ? x : left_maxx),left_miny,y,left_seed};
+                end else if(top_root!=0) begin
+                    stats_we=1;stats_write_address=top_root;
+                    stats_write_data={top_area+17'd1,(x<top_minx ? x : top_minx),
+                        (x>top_maxx ? x : top_maxx),top_miny,y,top_seed};
+                end
+            end
+            default:;
+        endcase
+    end
+    always @(posedge I_clk) begin
+        stats_q<=label_stats[stats_read_address];
+        if(stats_we) label_stats[stats_write_address]<=stats_write_data;
+    end
     // Synchronous RAM ports, deliberately outside reset loops for block RAM inference.
     always @(posedge I_clk) begin
         if(accept) mask[capture_address]<=I_color;
@@ -137,10 +185,7 @@ module color_shape_detect #(
                 CLEAR: begin
                     in_use[scan[LABEL_BITS-1:0]]<=0;
                     parent[scan[LABEL_BITS-1:0]]<=scan[LABEL_BITS-1:0];
-                    area[scan[LABEL_BITS-1:0]]<=0; color[scan[LABEL_BITS-1:0]]<=0;
-                    xmin[scan[LABEL_BITS-1:0]]<=0; xmax[scan[LABEL_BITS-1:0]]<=0;
-                    ymin[scan[LABEL_BITS-1:0]]<=0; ymax[scan[LABEL_BITS-1:0]]<=0;
-                    seedx[scan[LABEL_BITS-1:0]]<=0;
+                    color[scan[LABEL_BITS-1:0]]<=0;
                     if(scan==LABELS-1) state<=READ_PIXEL;
                     else scan<=scan+1'b1;
                 end
@@ -149,7 +194,8 @@ module color_shape_detect #(
                     pixel_color<=mask_q;
                     left_root<=left_label;
                     top_root<=y==0 ? {LABEL_BITS{1'b0}} : top_q;
-                    state<=FIND_LEFT;
+                    // Background needs only a zero row label; no metadata read.
+                    state<=mask_q==0 ? APPLY : FIND_LEFT;
                 end
                 FIND_LEFT: begin
                     if(left_root!=0 && parent[left_root]!=left_root) left_root<=parent[left_root];
@@ -166,10 +212,16 @@ module color_shape_detect #(
                     end
                 end
                 FETCH: begin
-                    left_area<=area[left_root]; top_area<=area[top_root];
-                    left_minx<=xmin[left_root];left_maxx<=xmax[left_root];left_miny<=ymin[left_root];
-                    top_minx<=xmin[top_root];top_maxx<=xmax[top_root];top_miny<=ymin[top_root];
-                    left_seed<=seedx[left_root];top_seed<=seedx[top_root];
+                    state<=FETCH_LEFT;
+                end
+                FETCH_LEFT:begin
+                    left_area<=stats_q[59:43];left_minx<=stats_q[42:34];
+                    left_maxx<=stats_q[33:25];left_miny<=stats_q[24:17];left_seed<=stats_q[8:0];
+                    state<=FETCH_TOP;
+                end
+                FETCH_TOP:begin
+                    top_area<=stats_q[59:43];top_minx<=stats_q[42:34];
+                    top_maxx<=stats_q[33:25];top_miny<=stats_q[24:17];top_seed<=stats_q[8:0];
                     state<=APPLY;
                 end
                 APPLY: begin
@@ -179,26 +231,9 @@ module color_shape_detect #(
                         left_label<=left_root;
                         if(top_root!=0 && top_root!=left_root) begin
                             parent[top_root]<=left_root;
-                            area[left_root]<=left_area+top_area+1'b1;
-                            area[top_root]<=0;
-                            xmin[left_root]<=left_minx<top_minx ? left_minx : top_minx;
-                            xmax[left_root]<=x>top_maxx ? (x>left_maxx ? x : left_maxx) :
-                                              (top_maxx>left_maxx ? top_maxx : left_maxx);
-                            ymin[left_root]<=left_miny<top_miny ? left_miny : top_miny;
-                            seedx[left_root]<=left_miny<top_miny ? left_seed :
-                                (top_miny<left_miny ? top_seed : (left_seed<top_seed ? left_seed : top_seed));
-                            ymax[left_root]<=y;
-                        end else begin
-                            area[left_root]<=left_area+1'b1;
-                            if(x>left_maxx) xmax[left_root]<=x;
-                            ymax[left_root]<=y;
                         end
                     end else if(top_root!=0) begin
                         left_label<=top_root;
-                        area[top_root]<=top_area+1'b1;
-                        if(x<top_minx) xmin[top_root]<=x;
-                        if(x>top_maxx) xmax[top_root]<=x;
-                        ymax[top_root]<=y;
                     end else begin alloc_probe<=1;state<=ALLOC_FIND;end
                 end
                 ALLOC_FIND:begin
@@ -211,9 +246,7 @@ module color_shape_detect #(
                 ALLOC_COMMIT:begin
                     in_use[alloc_slot]<=1;parent[alloc_slot]<=alloc_slot;
                     if(alloc_slot>allocated) allocated<=alloc_slot;
-                    left_label<=alloc_slot;color[alloc_slot]<=pixel_color;area[alloc_slot]<=1;
-                    xmin[alloc_slot]<=x;xmax[alloc_slot]<=x;ymin[alloc_slot]<=y;ymax[alloc_slot]<=y;
-                    seedx[alloc_slot]<=x;state<=NEXT_PIXEL;
+                    left_label<=alloc_slot;color[alloc_slot]<=pixel_color;state<=NEXT_PIXEL;
                 end
                 NEXT_PIXEL: begin
                     if(x==WIDTH-1) begin
@@ -240,13 +273,15 @@ module color_shape_detect #(
                     else state<=RETIRE_FETCH;
                 end
                 RETIRE_FETCH:begin
-                    retire_area<=area[retire_root];retire_maxy<=ymax[retire_root];state<=RETIRE_TEST;
+                    state<=RETIRE_LATCH;
+                end
+                RETIRE_LATCH:begin
+                    retire_area<=stats_q[59:43];retire_maxy<=stats_q[16:9];state<=RETIRE_TEST;
                 end
                 RETIRE_TEST:begin
                     parent[retire_index[LABEL_BITS-1:0]]<=retire_root;
                     if(retire_maxy<retire_y && retire_area<MIN_AREA) begin
                         in_use[retire_index[LABEL_BITS-1:0]]<=0;
-                        if(retire_index==retire_root) area[retire_root]<=0;
                     end
                     state<=RETIRE_NEXT;
                 end
@@ -265,7 +300,6 @@ module color_shape_detect #(
                         if(in_use[retire_index[LABEL_BITS-1:0]] &&
                            parent[retire_index[LABEL_BITS-1:0]]!=retire_index[LABEL_BITS-1:0]) begin
                             in_use[retire_index[LABEL_BITS-1:0]]<=0;
-                            area[retire_index[LABEL_BITS-1:0]]<=0;
                         end
                         retire_index<=retire_index+1'b1;
                     end
@@ -275,14 +309,15 @@ module color_shape_detect #(
                         shape_index<=0;state<=overflow || count==0 ? PUBLISH : SHAPE_START;
                     end
                     else begin
-                        current_area<=area[scan[LABEL_BITS-1:0]];
-                        current_minx<=xmin[scan[LABEL_BITS-1:0]];current_maxx<=xmax[scan[LABEL_BITS-1:0]];
-                        current_miny<=ymin[scan[LABEL_BITS-1:0]];current_maxy<=ymax[scan[LABEL_BITS-1:0]];
                         current_color<=color[scan[LABEL_BITS-1:0]];
-                        current_seed<=seedx[scan[LABEL_BITS-1:0]];
                         current_root<=in_use[scan[LABEL_BITS-1:0]] && parent[scan[LABEL_BITS-1:0]]==scan[LABEL_BITS-1:0];
-                        state<=MEASURE;
+                        state<=SCAN_LATCH;
                     end
+                end
+                SCAN_LATCH:begin
+                    current_area<=stats_q[59:43];current_minx<=stats_q[42:34];current_maxx<=stats_q[33:25];
+                    current_miny<=stats_q[24:17];current_maxy<=stats_q[16:9];current_seed<=stats_q[8:0];
+                    state<=MEASURE;
                 end
                 MEASURE: begin
                     bw<={1'b0,current_maxx}-{1'b0,current_minx}+1'b1;

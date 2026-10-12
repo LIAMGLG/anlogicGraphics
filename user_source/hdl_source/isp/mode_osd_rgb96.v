@@ -20,7 +20,7 @@ module mode_osd_rgb96 #(
     wire [10:0] local_y = current_y - 11'd16;
     wire inside_panel = current_x >= 16 && current_x < 240 &&
                         current_y >= 16 && current_y < 48;
-    reg [55:0] label;
+    wire [2:0] mode=I_mode<=4 ? I_mode : 3'd0;
     reg [7:0] character;
     wire [15:0] glyph;
     reg [95:0] rendered;
@@ -28,17 +28,38 @@ module mode_osd_rgb96 #(
     reg [3:0] column;
 
     always @(*) begin
-        case (I_mode)
-            3'd0: label = "NORMAL ";
-            3'd1: label = "BINARY ";
-            3'd2: label = "SOBEL  ";
-            3'd3: label = "CARTOON";
-            3'd4: label = "GRAY   ";
-            default: label = "NORMAL ";
-        endcase
         character = 8'h20;
-        if (inside_panel)
-            character = label[(6-local_x[7:5])*8 +: 8];
+        if (inside_panel) case({mode,local_x[7:5]})
+            6'd0:character="N";
+            6'd1:character="O";
+            6'd2:character="R";
+            6'd3:character="M";
+            6'd4:character="A";
+            6'd5:character="L";
+            6'd8:character="B";
+            6'd9:character="I";
+            6'd10:character="N";
+            6'd11:character="A";
+            6'd12:character="R";
+            6'd13:character="Y";
+            6'd16:character="S";
+            6'd17:character="O";
+            6'd18:character="B";
+            6'd19:character="E";
+            6'd20:character="L";
+            6'd24:character="C";
+            6'd25:character="A";
+            6'd26:character="R";
+            6'd27:character="T";
+            6'd28:character="O";
+            6'd29:character="O";
+            6'd30:character="N";
+            6'd32:character="G";
+            6'd33:character="R";
+            6'd34:character="A";
+            6'd35:character="Y";
+            default:character=8'h20;
+        endcase
     end
     osd_char_lib u_font (.I_char(character), .I_row(local_y[4:1]), .O_row_bits(glyph));
 

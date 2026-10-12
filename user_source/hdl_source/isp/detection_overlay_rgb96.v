@@ -32,9 +32,7 @@ module detection_overlay_rgb96 #(
     wire [11:0] tx=cx-12'd16;
     wire [10:0] ty=cy-11'd96;
     reg [2:0] nr,ng;
-    reg [127:0] summary;
-    reg [127:0] legend;
-    reg [127:0] diagnostic;
+    reg [2:0] nr_next,ng_next;
     reg [7:0] debug_byte;
     wire [10:0] debug_y=cy-11'd176;
     wire [63:0] debug_box=frame_boxes[debug_y[5:4]*64 +:64];
@@ -46,10 +44,10 @@ module detection_overlay_rgb96 #(
     reg [15:0] border_hit,tab_hit,tab_ink;
     reg [15:0] border_d,tab_d,ink_d;
     reg [95:0] colors_d,colors;
-    reg [23:0] box_color;
     reg [63:0] b;
     reg [10:0] px;
     reg [3:0] column;
+    reg [3:0] y_inside,y_border,y_tab;
     integer obj,lane,stat;
     wire [63:0] number_glyph;
     genvar number;
@@ -77,77 +75,163 @@ module detection_overlay_rgb96 #(
             default: color_rgb=24'hffffff;
         endcase end
     endfunction
+    function [7:0] overflow_char;
+        input [3:0] col;
+        begin case(col)
+            4'd0:overflow_char=8'h4C;
+            4'd1:overflow_char="A";
+            4'd2:overflow_char="B";
+            4'd3:overflow_char="E";
+            4'd4:overflow_char="L";
+            4'd6:overflow_char="O";
+            4'd7:overflow_char="V";
+            4'd8:overflow_char="E";
+            4'd9:overflow_char="R";
+            4'd10:overflow_char="F";
+            4'd11:overflow_char="L";
+            4'd12:overflow_char="O";
+            4'd13:overflow_char="W";
+            default:overflow_char=8'h20;
+        endcase end
+    endfunction
+    function [7:0] color_char;
+        input [1:0] kind;
+        input [3:0] col;
+        begin case({kind,col})
+            6'd0:color_char=8'h55;
+            6'd1:color_char=8'h4E;
+            6'd2:color_char=8'h4B;
+            6'd3:color_char=8'h4E;
+            6'd4:color_char=8'h4F;
+            6'd5:color_char=8'h57;
+            6'd6:color_char=8'h4E;
+            6'd16:color_char=8'h52;
+            6'd17:color_char=8'h45;
+            6'd18:color_char=8'h44;
+            6'd32:color_char=8'h47;
+            6'd33:color_char=8'h52;
+            6'd34:color_char=8'h45;
+            6'd35:color_char=8'h45;
+            6'd36:color_char=8'h4E;
+            6'd48:color_char=8'h42;
+            6'd49:color_char=8'h4C;
+            6'd50:color_char=8'h55;
+            6'd51:color_char=8'h45;
+            default:color_char=8'h20;
+        endcase end
+    endfunction
+    function [7:0] shape_char;
+        input [1:0] kind;
+        input [3:0] col;
+        begin case({kind,col})
+            6'd0:shape_char=8'h55;
+            6'd1:shape_char=8'h4E;
+            6'd2:shape_char=8'h4B;
+            6'd3:shape_char=8'h4E;
+            6'd4:shape_char=8'h4F;
+            6'd5:shape_char=8'h57;
+            6'd6:shape_char=8'h4E;
+            6'd16:shape_char=8'h52;
+            6'd17:shape_char=8'h45;
+            6'd18:shape_char=8'h43;
+            6'd19:shape_char=8'h54;
+            6'd32:shape_char=8'h43;
+            6'd33:shape_char=8'h49;
+            6'd34:shape_char=8'h52;
+            6'd35:shape_char=8'h43;
+            6'd36:shape_char=8'h4C;
+            6'd37:shape_char=8'h45;
+            6'd48:shape_char=8'h54;
+            6'd49:shape_char=8'h52;
+            6'd50:shape_char=8'h49;
+            6'd51:shape_char=8'h41;
+            6'd52:shape_char=8'h4E;
+            6'd53:shape_char=8'h47;
+            6'd54:shape_char=8'h4C;
+            6'd55:shape_char=8'h45;
+            default:shape_char=8'h20;
+        endcase end
+    endfunction
     always @(*) begin
-        nr=0; ng=0;
+        nr_next=0; ng_next=0;
         stat_box=0;
         for(stat=0;stat<4;stat=stat+1) begin
-            stat_box=frame_boxes[stat*64 +:64];
+            stat_box=I_boxes[stat*64 +:64];
             if(stat_box[63]) case(stat_box[62:61])
-                1: nr=nr+1'b1; 2: ng=ng+1'b1;
+                1: nr_next=nr_next+1'b1; 2: ng_next=ng_next+1'b1;
             endcase
         end
-        summary="N:0 R:0 G:0     ";
-        summary[111:104]=8'h30+frame_count;
-        summary[79:72]=8'h30+nr;
-        summary[47:40]=8'h30+ng;
-        if(frame_overflow) summary="LABEL OVERFLOW  ";
+    end
+    always @(*) begin
         entry=0;
         if(ty<64) entry=frame_boxes[ty[5:4]*64 +:64];
-        legend="                ";
-        if(entry[63]) begin
-            case(entry[62:61])
-                1: legend="1 RED           ";
-                2: legend="1 GREEN         ";
-                3: legend="1 BLUE          ";
-                default: legend="1 UNKNOWN       ";
-            endcase
-            legend[127:120]=8'h31+ty[5:4];
-            case(entry[60:59])
-                1: legend[63:0]="RECT    ";
-                2: legend[63:0]="CIRCLE  ";
-                3: legend[63:0]="TRIANGLE";
-                default: legend[63:0]="UNKNOWN ";
-            endcase
-        end
         character=8'h20; font_row=0;
-        diagnostic="                ";debug_byte=0;
-        if(DIAGNOSTICS && debug_y<64 && debug_box[63]) begin
+        debug_byte=0;
+        if(DIAGNOSTICS && debug_y<64 && debug_box[63])
             debug_byte=debug_info[debug_y[5:4]*8 +:8];
-            diagnostic="1 V:00 E:0      ";
-            diagnostic[127:120]=8'h31+debug_y[5:4];
-            diagnostic[95:88]=debug_byte[7:4]>=10 ? 8'h31 : 8'h30;
-            diagnostic[87:80]=8'h30+(debug_byte[7:4]>=10 ? debug_byte[7:4]-10 : debug_byte[7:4]);
-            diagnostic[55:48]=8'h30+debug_byte[3:0];
-        end
         if(cx>=16 && cx<272) begin
             if(cy>=64 && cy<80) begin
-                character=summary[127-tx[7:4]*8 -:8]; font_row=cy-64;
+                font_row=cy-64;
+                if(frame_overflow) character=overflow_char(tx[7:4]);
+                else case(tx[7:4])
+                    0:character="N";
+                    1,5,9:character=":";
+                    2:character=8'h30+frame_count;
+                    4:character="R";
+                    6:character=8'h30+nr;
+                    8:character="G";
+                    10:character=8'h30+ng;
+                    default:character=8'h20;
+                endcase
             end else if(cy>=96 && cy<160) begin
-                character=legend[127-tx[7:4]*8 -:8]; font_row=ty[3:0];
+                font_row=ty[3:0];
+                if(entry[63]) begin
+                    if(tx[7:4]==0) character=8'h31+ty[5:4];
+                    else if(tx[7:4]>=8) character=shape_char(entry[60:59],{1'b0,tx[6:4]});
+                    else if(tx[7:4]>=2) character=color_char(entry[62:61],tx[7:4]-4'd2);
+                end
             end else if(DIAGNOSTICS && cy>=176 && cy<240) begin
-                character=diagnostic[127-tx[7:4]*8 -:8];font_row=debug_y[3:0];
+                font_row=debug_y[3:0];
+                if(debug_box[63]) case(tx[7:4])
+                    0:character=8'h31+debug_y[5:4];
+                    2:character="V";
+                    3,8:character=":";
+                    4:character=debug_byte[7:4]>=10 ? 8'h31 : 8'h30;
+                    5:character=8'h30+(debug_byte[7:4]>=10 ? debug_byte[7:4]-10 : debug_byte[7:4]);
+                    7:character="E";
+                    9:character=8'h30+debug_byte[3:0];
+                    default:character=8'h20;
+                endcase
             end
         end
     end
     osd_char_lib u_font (.I_char(character_d),.I_row(font_row_d),.O_row_bits(glyph));
     always @(*) begin
-        border_hit=0;tab_hit=0;tab_ink=0;colors=0; box_color=0; b=0; px=0; column=0;
+        border_hit=0;tab_hit=0;tab_ink=0;colors=0; b=0; px=0; column=0;
+        y_inside=0;y_border=0;y_tab=0;
+        // Vertical tests and color decode are shared by all four pixel lanes.
+        for(obj=0;obj<4;obj=obj+1) begin
+            b=frame_boxes[obj*64 +:64];
+            colors[obj*24 +:24]=color_rgb(b[62:61]);
+            y_inside[obj]=b[63] && cy>=b[47:38] && cy<=b[26:17];
+            y_border[obj]=cy<b[47:38]+2 || cy+2>b[26:17];
+            y_tab[obj]=b[63] && cy>=b[47:38] && cy<b[47:38]+16;
+        end
         for(lane=0;lane<4;lane=lane+1) begin
             px=cx+lane;
             if(frame_enabled) begin
                 // Low-priority boxes first; object 1 wins if boxes intersect.
                 for(obj=3;obj>=0;obj=obj-1) begin
                     b=frame_boxes[obj*64 +:64];
-                    box_color=color_rgb(b[62:61]);
-                    colors[obj*24 +:24]=box_color;
-                    if(b[63] && px>=b[58:48] && px<=b[37:27] && cy>=b[47:38] && cy<=b[26:17] &&
-                      (px<b[58:48]+2 || px+2>b[37:27] || cy<b[47:38]+2 || cy+2>b[26:17]))
+                    if(y_inside[obj] && px>=b[58:48] && px<=b[37:27] &&
+                      (px<b[58:48]+2 || px+2>b[37:27] || y_border[obj]))
                         border_hit[obj*4+lane]=1;
                     // Numbered 16x16 tab maps each target to the fixed legend.
-                    if(b[63] && px>=b[58:48] && px<b[58:48]+16 && cy>=b[47:38] && cy<b[47:38]+16)
+                    if(y_tab[obj] && px>=b[58:48] && px<b[58:48]+16)
                         begin
                         tab_hit[obj*4+lane]=1;
-                        tab_ink[obj*4+lane]=number_glyph[obj*16+15-(px-b[58:48])];
+                        column=px-b[58:48];
+                        tab_ink[obj*4+lane]=number_glyph[obj*16+15-column];
                     end
                 end
             end
@@ -166,7 +250,7 @@ module detection_overlay_rgb96 #(
     end
     always @(posedge I_clk or negedge I_rst_n) begin
         if(!I_rst_n) begin
-            boxes<=0; debug_info<=0;count<=0; overflow<=0; enabled<=1;
+            boxes<=0; debug_info<=0;count<=0; overflow<=0; enabled<=1;nr<=0;ng<=0;
             x<=0; y<=0; data_d<=0; valid_d<=0; user_d<=0; last_d<=0;
             border_d<=0;tab_d<=0;ink_d<=0;colors_d<=0;
             cx<=0;cy<=0;input_data<=0;input_valid<=0;input_user<=0;input_last<=0;
@@ -175,6 +259,7 @@ module detection_overlay_rgb96 #(
         end else begin
             if(I_tuser) begin
                 boxes<=I_boxes;debug_info<=I_debug; count<=I_count; overflow<=I_overflow; enabled<=I_enable;
+                nr<=nr_next;ng<=ng_next;
                 x<=0; y<=0;
             end
             if(I_tvalid) begin
