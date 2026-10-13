@@ -4,7 +4,7 @@
 
 ## 工程与工作约定
 
-- 当前工作目录：`E:\Git_Code\anlogicGraphics`；此前工程目录为 `D:\Anlogic\TDproject\lab_ex1_mipi_hdmi_SC520\lab_ex1_mipi_hdmi`，勿沿用旧路径作为当前目录。
+- 当前工作目录：`D:\Anlogic\TDproject\lab_ex1_mipi_hdmi_SC520\lab_ex1_mipi_hdmi`；2026-10-13从 `D:\Anlogic\TDproject\anlogicGraphics` 同步源码、配置、验证和文档，保留当前目录已有TD Run产物。工程路径已适配当前目录。
 - GitHub：[anlogicGraphics](https://github.com/LIAMGLG/anlogicGraphics)，分支 `master`；提交版本以 `git log -1` 为准。
 - TD入口：`td_project/camera_to_dsi_display.al`；顶层 `design_top_wrapper`；PH1P35MDG324，speed 3，TD 6.2.168116。
 - **TD Run由用户完成。未经用户请求，不自动综合、布局布线、生成或下载bit；不覆盖用户已有Run产物。**已有bit不能单独证明对应当前源码。
