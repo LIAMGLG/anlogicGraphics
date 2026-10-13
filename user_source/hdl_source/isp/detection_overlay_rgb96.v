@@ -1,20 +1,20 @@
 // Draw four colored bounding boxes, numbered legend and per-color counts.
 // Results and enable are snapshotted at SOF. Three-cycle video/control latency.
 module detection_overlay_rgb96 #(
-    parameter integer IMG_WIDTH=1280,DIAGNOSTICS=0
+    parameter integer IMG_WIDTH=1280,COORDINATES=1
 )(
     input wire I_clk,I_rst_n,I_enable,
     input wire [255:0] I_boxes,
     input wire [2:0] I_count,
     input wire I_overflow,
-    input wire [31:0] I_debug,
+    input wire [3:0] I_held,
     input wire [95:0] I_tdata,
     input wire I_tvalid,I_tuser,I_tlast,
     output reg [95:0] O_tdata,
     output reg O_tvalid,O_tuser,O_tlast
 );
     reg [255:0] boxes;
-    reg [31:0] debug_info;
+    reg [3:0] held;
     reg [2:0] count;
     reg overflow,enabled;
     wire [255:0] frame_boxes=boxes;
@@ -33,9 +33,62 @@ module detection_overlay_rgb96 #(
     wire [10:0] ty=cy-11'd96;
     reg [2:0] nr,ng;
     reg [2:0] nr_next,ng_next;
-    reg [7:0] debug_byte;
-    wire [10:0] debug_y=cy-11'd176;
-    wire [63:0] debug_box=frame_boxes[debug_y[5:4]*64 +:64];
+    wire [10:0] coordinate_y=cy-11'd176;
+    wire [63:0] coordinate_box=frame_boxes[coordinate_y[5:4]*64 +:64];
+    // Eight center coordinates share one 12-bit shift/add-3 BCD converter.
+    // Conversion starts at SOF and completes in 104 clocks, before row 176.
+    reg [95:0] centers;
+    reg [127:0] coordinates,working_digits;
+    reg [11:0] binary_value;
+    reg [15:0] decimal_value;
+    reg [3:0] conversion_step;
+    reg [2:0] coordinate_index;
+    reg converting,coordinates_ready;
+    reg [15:0] adjusted_bcd;
+    wire [15:0] shifted_bcd={adjusted_bcd[14:0],binary_value[11]};
+    wire [15:0] coordinate_x_bcd=coordinates[coordinate_y[5:4]*32 +:16];
+    wire [15:0] coordinate_y_bcd=coordinates[coordinate_y[5:4]*32+16 +:16];
+    integer digit,center_slot;
+    function [11:0] center_x;
+        input [63:0] r;
+        reg [11:0] sum;
+        begin sum={1'b0,r[58:48]}+{1'b0,r[37:27]};center_x=sum>>1;end
+    endfunction
+    function [11:0] center_y;
+        input [63:0] r;
+        reg [10:0] sum;
+        begin sum={1'b0,r[47:38]}+{1'b0,r[26:17]};center_y={1'b0,sum}>>1;end
+    endfunction
+    always @(*) begin
+        adjusted_bcd=decimal_value;
+        for(digit=0;digit<4;digit=digit+1)
+            if(decimal_value[digit*4 +:4]>=5)
+                adjusted_bcd[digit*4 +:4]=decimal_value[digit*4 +:4]+4'd3;
+    end
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if(!I_rst_n) begin
+            centers<=0;coordinates<=0;working_digits<=0;binary_value<=0;decimal_value<=0;
+            conversion_step<=0;coordinate_index<=0;converting<=0;coordinates_ready<=0;
+        end else if(I_tuser) begin
+            for(center_slot=0;center_slot<4;center_slot=center_slot+1) begin
+                centers[center_slot*24 +:12]<=center_x(I_boxes[center_slot*64 +:64]);
+                centers[center_slot*24+12 +:12]<=center_y(I_boxes[center_slot*64 +:64]);
+            end
+            conversion_step<=0;coordinate_index<=0;converting<=COORDINATES!=0;coordinates_ready<=0;
+        end else if(converting) begin
+            if(conversion_step==0) begin
+                binary_value<=centers[coordinate_index*12 +:12];decimal_value<=0;conversion_step<=1;
+            end else begin
+                decimal_value<=shifted_bcd;binary_value<={binary_value[10:0],1'b0};
+                if(conversion_step==12) begin
+                    working_digits[coordinate_index*16 +:16]<=shifted_bcd;conversion_step<=0;
+                    if(coordinate_index==7) begin
+                        coordinates<={shifted_bcd,working_digits[111:0]};converting<=0;coordinates_ready<=1;
+                    end else coordinate_index<=coordinate_index+1'b1;
+                end else conversion_step<=conversion_step+1'b1;
+            end
+        end
+    end
     reg [63:0] entry;
     reg [63:0] stat_box;
     reg [7:0] character;
@@ -157,7 +210,7 @@ module detection_overlay_rgb96 #(
         stat_box=0;
         for(stat=0;stat<4;stat=stat+1) begin
             stat_box=I_boxes[stat*64 +:64];
-            if(stat_box[63]) case(stat_box[62:61])
+            if(stat_box[63] && !I_held[stat]) case(stat_box[62:61])
                 1: nr_next=nr_next+1'b1; 2: ng_next=ng_next+1'b1;
             endcase
         end
@@ -166,9 +219,6 @@ module detection_overlay_rgb96 #(
         entry=0;
         if(ty<64) entry=frame_boxes[ty[5:4]*64 +:64];
         character=8'h20; font_row=0;
-        debug_byte=0;
-        if(DIAGNOSTICS && debug_y<64 && debug_box[63])
-            debug_byte=debug_info[debug_y[5:4]*8 +:8];
         if(cx>=16 && cx<272) begin
             if(cy>=64 && cy<80) begin
                 font_row=cy-64;
@@ -187,19 +237,29 @@ module detection_overlay_rgb96 #(
                 font_row=ty[3:0];
                 if(entry[63]) begin
                     if(tx[7:4]==0) character=8'h31+ty[5:4];
-                    else if(tx[7:4]>=8) character=shape_char(entry[60:59],{1'b0,tx[6:4]});
+                    else if(tx[7:4]>=8 && held[ty[5:4]]) begin
+                        case(tx[7:4])
+                            8:character="W";9:character="A";10:character="I";11:character="T";
+                            default:character=8'h20;
+                        endcase
+                    end else if(tx[7:4]>=8) character=shape_char(entry[60:59],{1'b0,tx[6:4]});
                     else if(tx[7:4]>=2) character=color_char(entry[62:61],tx[7:4]-4'd2);
                 end
-            end else if(DIAGNOSTICS && cy>=176 && cy<240) begin
-                font_row=debug_y[3:0];
-                if(debug_box[63]) case(tx[7:4])
-                    0:character=8'h31+debug_y[5:4];
-                    2:character="V";
-                    3,8:character=":";
-                    4:character=debug_byte[7:4]>=10 ? 8'h31 : 8'h30;
-                    5:character=8'h30+(debug_byte[7:4]>=10 ? debug_byte[7:4]-10 : debug_byte[7:4]);
-                    7:character="E";
-                    9:character=8'h30+debug_byte[3:0];
+            end else if(COORDINATES && coordinates_ready && cy>=176 && cy<240) begin
+                font_row=coordinate_y[3:0];
+                if(coordinate_box[63]) case(tx[7:4])
+                    0:character=8'h31+coordinate_y[5:4];
+                    2:character="X";
+                    3,10:character=":";
+                    4:character=8'h30+coordinate_x_bcd[15:12];
+                    5:character=8'h30+coordinate_x_bcd[11:8];
+                    6:character=8'h30+coordinate_x_bcd[7:4];
+                    7:character=8'h30+coordinate_x_bcd[3:0];
+                    9:character="Y";
+                    11:character=8'h30+coordinate_y_bcd[15:12];
+                    12:character=8'h30+coordinate_y_bcd[11:8];
+                    13:character=8'h30+coordinate_y_bcd[7:4];
+                    14:character=8'h30+coordinate_y_bcd[3:0];
                     default:character=8'h20;
                 endcase
             end
@@ -212,7 +272,7 @@ module detection_overlay_rgb96 #(
         // Vertical tests and color decode are shared by all four pixel lanes.
         for(obj=0;obj<4;obj=obj+1) begin
             b=frame_boxes[obj*64 +:64];
-            colors[obj*24 +:24]=color_rgb(b[62:61]);
+            colors[obj*24 +:24]=held[obj] ? 24'h909090 : color_rgb(b[62:61]);
             y_inside[obj]=b[63] && cy>=b[47:38] && cy<=b[26:17];
             y_border[obj]=cy<b[47:38]+2 || cy+2>b[26:17];
             y_tab[obj]=b[63] && cy>=b[47:38] && cy<b[47:38]+16;
@@ -225,7 +285,7 @@ module detection_overlay_rgb96 #(
                     b=frame_boxes[obj*64 +:64];
                     if(y_inside[obj] && px>=b[58:48] && px<=b[37:27] &&
                       (px<b[58:48]+2 || px+2>b[37:27] || y_border[obj]))
-                        border_hit[obj*4+lane]=1;
+                        border_hit[obj*4+lane]=!held[obj] || (px[3]^cy[3])==1'b0;
                     // Numbered 16x16 tab maps each target to the fixed legend.
                     if(y_tab[obj] && px>=b[58:48] && px<b[58:48]+16)
                         begin
@@ -250,7 +310,7 @@ module detection_overlay_rgb96 #(
     end
     always @(posedge I_clk or negedge I_rst_n) begin
         if(!I_rst_n) begin
-            boxes<=0; debug_info<=0;count<=0; overflow<=0; enabled<=1;nr<=0;ng<=0;
+            boxes<=0;held<=0;count<=0; overflow<=0; enabled<=1;nr<=0;ng<=0;
             x<=0; y<=0; data_d<=0; valid_d<=0; user_d<=0; last_d<=0;
             border_d<=0;tab_d<=0;ink_d<=0;colors_d<=0;
             cx<=0;cy<=0;input_data<=0;input_valid<=0;input_user<=0;input_last<=0;
@@ -258,7 +318,7 @@ module detection_overlay_rgb96 #(
             O_tdata<=0; O_tvalid<=0; O_tuser<=0; O_tlast<=0;
         end else begin
             if(I_tuser) begin
-                boxes<=I_boxes;debug_info<=I_debug; count<=I_count; overflow<=I_overflow; enabled<=I_enable;
+                boxes<=I_boxes;held<=I_held; count<=I_count; overflow<=I_overflow; enabled<=I_enable;
                 nr<=nr_next;ng<=ng_next;
                 x<=0; y<=0;
             end
@@ -273,7 +333,7 @@ module detection_overlay_rgb96 #(
             character_d<=character;font_row_d<=font_row;column_d<=tx[3:0];
             panel_d<=frame_enabled && cx>=16 && cx<272 &&
                 ((cy>=64 && cy<80) || (cy>=96 && cy<160 && entry[63]) ||
-                 (DIAGNOSTICS && cy>=176 && cy<240 && debug_box[63]));
+                 (COORDINATES && coordinates_ready && cy>=176 && cy<240 && coordinate_box[63]));
             O_tdata<=text_marked; O_tvalid<=valid_d; O_tuser<=user_d; O_tlast<=last_d;
         end
     end

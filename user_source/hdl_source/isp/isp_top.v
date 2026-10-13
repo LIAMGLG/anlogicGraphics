@@ -1,7 +1,7 @@
 module isp_top (
     input 			axi4s_video_aclk,
     input 			I_rst_n			,
-    input 			I_key_bin		,   // key1: normal / binary / edge / cartoon / gray
+    input 			I_key_bin		,   // key1: normal / binary / edge / cartoon / gray / motion
     input wire      I_key_detect,    // k4: toggle detection overlays
     input 			I_tlast			,
     input 			I_tuser			,
@@ -67,14 +67,20 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire raw_detected_overflow,raw_detected_update;
   wire capture_valid,capture_done,stable_update;
   wire [31:0] raw_debug;
-  reg [31:0] published_debug;
-  wire [31:0] display_debug=stable_update ? raw_debug : published_debug;
+  wire [3:0] detected_held;
+  wire [31:0] display_debug;
   wire [95:0] mask_osd_data;
   wire mask_osd_valid,mask_osd_user,mask_osd_last;
   wire detection_key_pressed;
   reg detection_enabled;
   reg [95:0] normal_data_d1, binary_data_d1, normal_data_d2, binary_data_d2;
   reg [2:0] video_mode_d1, video_mode_d2;
+  reg [95:0] motion_rgb_d1,motion_rgb_d2,motion_rgb_d3,motion_rgb_d4;
+  wire [143:0] motion_regions;
+  wire motion_ready,motion_selected;
+  wire [95:0] motion_data;
+  wire motion_valid,motion_user,motion_last;
+  reg [2:0] overlay_mode_d1,overlay_mode_d2,overlay_mode_d3;
   wire [95:0] processed_data = (video_mode_d2 == 3'd4) ? grayscale_data :
                                (video_mode_d2 == 3'd3) ? cartoon_O_tdata :
                                (video_mode_d2 == 3'd2) ? edge_O_tdata :
@@ -195,6 +201,24 @@ always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
         video_mode_d2 <= video_mode_d1;
     end
 end
+// Match the two-clock gain and two-clock edge alignment, while preserving
+// ungained AWB pixels for motion detection. Existing video/control latency stays.
+always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
+    if(!I_rst_n) begin
+        motion_rgb_d1<=0;motion_rgb_d2<=0;motion_rgb_d3<=0;motion_rgb_d4<=0;
+        overlay_mode_d1<=0;overlay_mode_d2<=0;overlay_mode_d3<=0;
+    end else begin
+        motion_rgb_d1<=awb_O_tdata;motion_rgb_d2<=motion_rgb_d1;
+        motion_rgb_d3<=motion_rgb_d2;motion_rgb_d4<=motion_rgb_d3;
+        overlay_mode_d1<=saturation_mode;overlay_mode_d2<=overlay_mode_d1;
+        overlay_mode_d3<=overlay_mode_d2;
+    end
+end
+motion_detect_rgb96 u_motion_detect (
+    .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_enable(video_mode_d2==3'd5),
+    .I_tdata(motion_rgb_d4),.I_tvalid(edge_O_tvalid),.I_tuser(edge_O_tuser),.I_tlast(edge_O_tlast),
+    .O_regions(motion_regions),.O_ready(motion_ready)
+);
 grayscale_rgb96 u_grayscale (
     .I_tdata(normal_data_d2),.O_tdata(grayscale_data)
 );
@@ -212,14 +236,12 @@ grayscale_rgb96 u_grayscale (
         .O_update(raw_detected_update), .O_busy(),.O_capture_valid(capture_valid),
         .O_capture_done(capture_done),.O_debug(raw_debug)
     );
-    detection_result_stabilizer u_detection_stabilizer (
+    target_tracker u_target_tracker (
         .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_update(raw_detected_update),
         .I_boxes(raw_detected_boxes),.I_count(raw_detected_count),.I_overflow(raw_detected_overflow),
+        .I_frame_start(awb_O_tuser),.I_debug(raw_debug),.O_debug(display_debug),.O_held(detected_held),.O_busy(),
         .O_boxes(detected_boxes),.O_count(detected_count),.O_overflow(detected_overflow),.O_update(stable_update)
     );
-    always @(posedge axi4s_video_aclk or negedge I_rst_n)
-        if(!I_rst_n) published_debug<=0;
-        else if(stable_update) published_debug<=raw_debug;
     key_remove_shakes u_detection_key (
         .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n), .I_key_in(I_key_detect),
         .O_key_trig_out(detection_key_pressed)
@@ -242,22 +264,30 @@ grayscale_rgb96 u_grayscale (
         .O_tdata(osd_data), .O_tvalid(osd_valid), .O_tuser(osd_user), .O_tlast(osd_last)
     );
     detection_mask_osd_rgb96 u_detection_mask_osd (
-        .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_enable(detection_enabled),
+        .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_enable(detection_enabled && saturation_mode!=3'd5),
         .I_capture_valid(capture_valid),.I_capture_done(capture_done),.I_result_update(stable_update),
         .I_x(reduced_x),.I_y(reduced_y),.I_color(reduced_color),
         .I_tdata(osd_data),.I_tvalid(osd_valid),.I_tuser(osd_user),.I_tlast(osd_last),
         .O_tdata(mask_osd_data),.O_tvalid(mask_osd_valid),.O_tuser(mask_osd_user),.O_tlast(mask_osd_last)
     );
-    detection_overlay_rgb96 #(.DIAGNOSTICS(1)) u_detection_overlay (
-        .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n), .I_enable(detection_enabled),
+    detection_overlay_rgb96 #(.COORDINATES(1)) u_detection_overlay (
+        .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n), .I_enable(detection_enabled && overlay_mode_d3!=3'd5),
         .I_boxes(detected_boxes), .I_count(detected_count), .I_overflow(detected_overflow),
-        .I_debug(display_debug),
+        .I_held(detected_held),
         .I_tdata(mask_osd_data), .I_tvalid(mask_osd_valid), .I_tuser(mask_osd_user), .I_tlast(mask_osd_last),
         .O_tdata(detection_data), .O_tvalid(detection_valid), .O_tuser(detection_user), .O_tlast(detection_last)
     );
+    motion_overlay_rgb96 u_motion_overlay (
+        .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_enable(detection_enabled),
+        .I_motion(overlay_mode_d3==3'd5),.I_ready(motion_ready),.I_regions(motion_regions),
+        .I_tdata(mask_osd_data),.I_tvalid(mask_osd_valid),.I_tuser(mask_osd_user),.I_tlast(mask_osd_last),
+        .O_tdata(motion_data),.O_tvalid(motion_valid),.O_tuser(motion_user),.O_tlast(motion_last),
+        .O_motion(motion_selected)
+    );
     logo_osd_rgb96 u_logo_osd (
         .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),
-        .I_tdata(detection_data),.I_tvalid(detection_valid),.I_tuser(detection_user),.I_tlast(detection_last),
+        .I_tdata(motion_selected ? motion_data : detection_data),
+        .I_tvalid(detection_valid),.I_tuser(detection_user),.I_tlast(detection_last),
         .O_tdata(logo_data),.O_tvalid(logo_valid),.O_tuser(logo_user),.O_tlast(logo_last)
     );
     data_96bit_to_128bit u_data_96bit_to_128bit(

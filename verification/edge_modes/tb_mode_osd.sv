@@ -51,6 +51,7 @@ module tb_mode_osd;
                 0: text="NORMAL "; 1: text="BINARY ";
                 2: text="SOBEL  "; 3: text="CARTOON";
                 4: text="GRAY   ";
+                5: text="MOTION ";
             endcase
             if(vv) begin
                 for(lane=0;lane<4;lane=lane+1) begin
@@ -77,7 +78,7 @@ module tb_mode_osd;
         repeat(3) @(negedge clk); rst_n=1;
         // Whole rows around all panel edges; every character and all four modes.
         // Alternating SOF with first data / SOF before data, plus valid gaps.
-        for(frame=0;frame<5;frame=frame+1) begin
+        for(frame=0;frame<6;frame=frame+1) begin
             mode=frame;
             if(frame%2) drive(0,0,0,1,0);
             for(row=0;row<50;row=row+1) begin
@@ -93,7 +94,7 @@ module tb_mode_osd;
         @(negedge clk); rst_n=1; mode=0;
         drive(0,0,1,1,0);
         if(yellow_count==0) $fatal(1,"OSD text missing");
-        $display("PASS: mode OSD five labels, pixel lanes, panel edges, SOF, gaps, reset and one-cycle control alignment");
+        $display("PASS: mode OSD six labels, pixel lanes, panel edges, SOF, gaps, reset and one-cycle control alignment");
         $finish;
     end
     initial begin #2000000; $fatal(1,"OSD timeout"); end

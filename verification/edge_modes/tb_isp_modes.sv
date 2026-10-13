@@ -68,7 +68,7 @@ module tb_isp_modes;
             if (gained_user) begin active_mode = requested; row=0; group_index=0; end
             luminance = {2'b0,gained_rgb[23:18]} + {1'b0,gained_rgb[15:9]} + {2'b0,gained_rgb[7:2]};
             case(active_mode)
-                0: wanted = {4{gained_rgb}};
+                0,5: wanted = {4{gained_rgb}};
                 1: wanted = luminance >= 64 ? {96{1'b1}} : 96'd0;
                 2: wanted = 0; // two rows: Sobel windows are masked
                 3: wanted = (row >= 1 && group_index > 0) ? {4{24'h55aaaa}} : 96'd0;
@@ -133,6 +133,7 @@ module tb_isp_modes;
                 0: osd_text="NORMAL "; 1: osd_text="BINARY ";
                 2: osd_text="SOBEL  "; 3: osd_text="CARTOON";
                 4: osd_text="GRAY   ";
+                5: osd_text="MOTION ";
             endcase
             for(osd_lane=0;osd_lane<4;osd_lane=osd_lane+1) begin
                 osd_px=osd_x+osd_lane;
@@ -157,8 +158,8 @@ module tb_isp_modes;
         force dut.u_key_video_mode.requested_mode = requested;
         repeat(4) @(negedge clk); rst_n=1;
         // Continuous beats and adjacent frame boundaries exercise mode/data alignment.
-        for(frame=0; frame<5; frame=frame+1) begin
-            requested = (frame+1)%5;
+        for(frame=0; frame<6; frame=frame+1) begin
+            requested = (frame+1)%6;
             for(beat=0; beat<32; beat=beat+1) begin
                 @(negedge clk); valid=1; user=(beat==0); last=(beat%16==15);
                 data = frame==2 ? 40'h00638cd3 : (beat%2 ? 40'h00f0d0e0 : 40'h00103020);
@@ -172,7 +173,7 @@ module tb_isp_modes;
         end
         @(negedge clk); valid=0; user=0; last=0;
         repeat(4) @(negedge clk);
-        $display("PASS: ISP normal/binary/edge/cartoon/gray mux, continuous beats and frame-boundary latency alignment");
+        $display("PASS: ISP normal/binary/edge/cartoon/gray mux plus motion, continuous beats and frame-boundary latency alignment");
         $finish;
     end
 endmodule

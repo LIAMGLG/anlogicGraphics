@@ -9,6 +9,7 @@ try {
     & (Join-Path $ModelSimBin 'vlog.exe') -work $lib -sv `
         user_source/hdl_source/isp/shape_contour_classifier.v `
         user_source/hdl_source/isp/detection_result_stabilizer.v `
+        user_source/hdl_source/isp/target_tracker.v `
         user_source/hdl_source/isp/osd_char_lib.v `
         user_source/hdl_source/isp/color_reduce_rgb96.v `
         user_source/hdl_source/isp/color_shape_detect.v `
@@ -17,11 +18,13 @@ try {
         verification/shape_detection/tb_color_reduce.sv `
         verification/shape_detection/tb_color_shape.sv `
         verification/shape_detection/tb_detection_overlay.sv `
+        verification/shape_detection/tb_detection_coordinates.sv `
         verification/shape_detection/tb_shape_contour.sv `
         verification/shape_detection/tb_detection_stability.sv `
+        verification/shape_detection/tb_target_tracker.sv `
         verification/shape_detection/tb_detection_mask.sv
     if($LASTEXITCODE -ne 0) { throw 'Detection vlog failed' }
-    $tests=@('tb_color_reduce','tb_color_shape','tb_detection_overlay','tb_shape_contour','tb_detection_stability','tb_detection_mask')
+    $tests=@('tb_color_reduce','tb_color_shape','tb_detection_overlay','tb_detection_coordinates','tb_shape_contour','tb_detection_stability','tb_target_tracker','tb_detection_mask')
     if($Only) {
         if($Only -notin $tests) { throw "Unknown test: $Only" }
         $tests=@($Only)
@@ -48,6 +51,7 @@ try {
         user_source/hdl_source/isp/mode_osd_rgb96.v `
         user_source/hdl_source/isp/shape_contour_classifier.v `
         user_source/hdl_source/isp/detection_result_stabilizer.v `
+        user_source/hdl_source/isp/target_tracker.v `
         user_source/hdl_source/isp/color_reduce_rgb96.v `
         user_source/hdl_source/isp/color_shape_detect.v `
         user_source/hdl_source/isp/detection_overlay_rgb96.v `
@@ -57,6 +61,8 @@ try {
         user_source/hdl_source/key_video_mode.v `
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `
+        user_source/hdl_source/isp/motion_detect_rgb96.v `
+        user_source/hdl_source/isp/motion_overlay_rgb96.v `
         user_source/hdl_source/isp/isp_top.v `
         user_source/hdl_source/isp/data128_96/data128_96.v `
         user_source/hdl_source/data_96bit_to_128bit.v `

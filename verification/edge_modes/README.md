@@ -1,10 +1,10 @@
 # 图像显示与模式轮换
 
-更新：2026-10-11。当前为五种显示模式；目标检测说明见 [检测 README](../shape_detection/README.md)，新增采集到HDMI延迟可视化见 [延迟 README](../video_latency/README.md)。
+更新：2026-10-13。当前为六种显示模式；目标检测说明见 [检测 README](../shape_detection/README.md)，独立运动模式见[运动 README](../motion_detection/README.md)，采集到HDMI延迟可视化见 [延迟 README](../video_latency/README.md)。
 
 ## 模式与操作
 
-k1循环：**NORMAL → BINARY → SOBEL → CARTOON → GRAY → NORMAL**，上电默认NORMAL。
+k1循环：**NORMAL → BINARY → SOBEL → CARTOON → GRAY → MOTION → NORMAL**，上电默认NORMAL。
 模式在帧起始生效，左上角黑底黄字同步显示名称。
 
 | 模式 | 功能 |
@@ -14,6 +14,7 @@ k1循环：**NORMAL → BINARY → SOBEL → CARTOON → GRAY → NORMAL**，上
 | SOBEL，2 | Sobel边缘提取，采用两像素采样 |
 | CARTOON，3 | 每通道量化到0/85/170/255，叠加Sobel黑轮廓 |
 | GRAY，4 | Y=floor((R+2G+B)/4)，三通道均输出Y |
+| MOTION，5 | 彩色原图叠加黄色运动区域和WAIT/MOVE/STILL，隐藏红绿检测叠加 |
 
 k2降低摄像头增益，k3提高摄像头增益，低有效、按住连续调整；不受显示模式或sw1限制。
 sw1保留输入，当前无功能。k1/k4消抖且长按只触发一次。
@@ -47,6 +48,8 @@ Sobel保留首两行和行首遮罩。二值化模块的分量截断亮度近似
 模块沿用实时视频链路约定，没有完整独立背压缓存。
 
 ## 验证
+
+2026-10-13：六模式轮换、六种标题、ISP模式对齐及八帧720p运动模式集成验证通过。运动叠加与红绿叠加均为三拍，模式选择不增加视频链路总延迟。尚未运行TD或更新bit。
 
 在工程根目录手动执行：
 

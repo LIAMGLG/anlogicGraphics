@@ -1,4 +1,4 @@
-// key1 cycles normal -> binary -> edge -> cartoon -> gray -> normal.
+// key1 cycles normal -> binary -> edge -> cartoon -> gray -> motion -> normal.
 // Commit at frame start and expose the new mode on the first frame beat.
 module key_video_mode #(
     parameter [2:0] RESET_MODE = 3'd0
@@ -22,7 +22,7 @@ module key_video_mode #(
         if (!I_rst_n)
             requested_mode <= RESET_MODE;
         else if (key_pressed)
-            requested_mode <= (requested_mode >= 3'd4) ? 3'd0 : requested_mode + 1'b1;
+            requested_mode <= (requested_mode >= 3'd5) ? 3'd0 : requested_mode + 1'b1;
     end
 
     always @(posedge I_clk or negedge I_rst_n) begin

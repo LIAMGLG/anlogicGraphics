@@ -120,8 +120,9 @@ module tb_edge_modes;
         press_key(1,2);
         press_key(2,3);
         press_key(3,4);
-        press_key(4,0);
-        $display("PASS: Sobel reference, borders, bubbles, SOF, reset, key debounce and five-mode frame switching");
+        press_key(4,5);
+        press_key(5,0);
+        $display("PASS: Sobel reference, borders, bubbles, SOF, reset, key debounce and six-mode frame switching");
         $finish;
     end
 endmodule

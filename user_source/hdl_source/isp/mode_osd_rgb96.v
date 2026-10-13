@@ -20,7 +20,7 @@ module mode_osd_rgb96 #(
     wire [10:0] local_y = current_y - 11'd16;
     wire inside_panel = current_x >= 16 && current_x < 240 &&
                         current_y >= 16 && current_y < 48;
-    wire [2:0] mode=I_mode<=4 ? I_mode : 3'd0;
+    wire [2:0] mode=I_mode<=5 ? I_mode : 3'd0;
     reg [7:0] character;
     wire [15:0] glyph;
     reg [95:0] rendered;
@@ -58,6 +58,12 @@ module mode_osd_rgb96 #(
             6'd33:character="R";
             6'd34:character="A";
             6'd35:character="Y";
+            6'd40:character="M";
+            6'd41:character="O";
+            6'd42:character="T";
+            6'd43:character="I";
+            6'd44:character="O";
+            6'd45:character="N";
             default:character=8'h20;
         endcase
     end

@@ -16,6 +16,7 @@ try {
         user_source/hdl_source/isp/color_shape_detect.v `
         user_source/hdl_source/isp/shape_contour_classifier.v `
         user_source/hdl_source/isp/detection_result_stabilizer.v `
+        user_source/hdl_source/isp/target_tracker.v `
         user_source/hdl_source/isp/detection_overlay_rgb96.v `
         user_source/hdl_source/isp/detection_mask_osd_rgb96.v `
         user_source/hdl_source/isp/osd_char_lib.v `
@@ -25,6 +26,8 @@ try {
         user_source/hdl_source/key_video_mode.v `
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `
+        user_source/hdl_source/isp/motion_detect_rgb96.v `
+        user_source/hdl_source/isp/motion_overlay_rgb96.v `
         user_source/hdl_source/isp/isp_top.v `
         verification/edge_modes/tb_edge_modes.sv `
         verification/edge_modes/tb_rgb_gain.sv
@@ -58,6 +61,7 @@ try {
         user_source/hdl_source/isp/color_shape_detect.v `
         user_source/hdl_source/isp/shape_contour_classifier.v `
         user_source/hdl_source/isp/detection_result_stabilizer.v `
+        user_source/hdl_source/isp/target_tracker.v `
         user_source/hdl_source/isp/detection_overlay_rgb96.v `
         user_source/hdl_source/isp/detection_mask_osd_rgb96.v `
         user_source/hdl_source/isp/osd_char_lib.v `
@@ -67,6 +71,8 @@ try {
         user_source/hdl_source/key_video_mode.v `
         user_source/hdl_source/key_remove_shakes.v `
         user_source/hdl_source/isp/binary_threshold_96.v `
+        user_source/hdl_source/isp/motion_detect_rgb96.v `
+        user_source/hdl_source/isp/motion_overlay_rgb96.v `
         user_source/hdl_source/isp/isp_top.v `
         user_source/hdl_source/isp/data128_96/data128_96.v `
         user_source/hdl_source/data_96bit_to_128bit.v `
@@ -78,6 +84,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'ISP vsim failed' }
     if (!(Select-String -Quiet -LiteralPath verification/edge_modes/isp_simulation.log -Pattern 'PASS: ISP normal/binary/edge/cartoon/gray mux')) {
         throw 'ISP simulation did not reach PASS'
+    }
+    & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLibrary -sv verification/motion_detection/tb_motion_isp.sv
+    if ($LASTEXITCODE -ne 0) { throw 'Motion ISP vlog failed' }
+    & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $ispLibrary tb_motion_isp `
+        -do 'onerror {quit -code 1}; run -all; quit -code 0' `
+        -l verification/motion_detection/isp_simulation.log
+    if ($LASTEXITCODE -ne 0 -or !(Select-String -Quiet -LiteralPath verification/motion_detection/isp_simulation.log -Pattern 'PASS:')) {
+        throw 'Motion ISP simulation did not pass'
     }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $library -sv verification/edge_modes/tb_mode_osd.sv
     if ($LASTEXITCODE -ne 0) { throw 'OSD vlog failed' }
