@@ -42,6 +42,7 @@ try {
     & (Join-Path $ModelSimBin 'vlib.exe') $ispLib
     if($LASTEXITCODE -ne 0) { throw 'ISP vlib failed' }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLib -sv `
+        user_source/hdl_source/red_rect_gimbal.v `
         user_source/hdl_source/isp/color_gain_rgb96.v `
         user_source/hdl_source/isp/saturation_rgb96.v `
         user_source/hdl_source/isp/grayscale_rgb96.v `

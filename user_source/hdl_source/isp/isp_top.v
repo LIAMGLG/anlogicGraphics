@@ -13,7 +13,11 @@ module isp_top (
     output 			O_tlast			,
     output 			O_tuser			,
     output 			O_tvalid		,
-    output 			I_tready
+    output 			I_tready,
+    output wire [255:0] O_target_boxes,
+    output wire [3:0] O_target_held,
+    output wire O_target_update,O_target_overflow,
+    output wire [15:0] O_camera_frame_id,O_target_frame_id
 );
  
 wire         m_aixs_tvalid;  //synthesis keep 
@@ -86,6 +90,23 @@ wire         m_aixs_tvalid;  //synthesis keep
                                (video_mode_d2 == 3'd2) ? edge_O_tdata :
                                (video_mode_d2 == 3'd1) ? binary_data_d2 : normal_data_d2;
   assign awb_O_tready = O_tready;
+  // Timestamp the mask actually accepted by CCL, not every incoming frame.
+  reg [15:0] camera_frame_id,captured_frame_id,result_frame_id;
+  always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
+      if(!I_rst_n) begin camera_frame_id<=0;captured_frame_id<=0;result_frame_id<=0;end
+      else begin
+          if(awb_O_tuser) camera_frame_id<=camera_frame_id+1'b1;
+          if(capture_valid && reduced_x==0 && reduced_y==0)
+              captured_frame_id<=camera_frame_id+(awb_O_tuser ? 16'd1 : 16'd0);
+          if(raw_detected_update) result_frame_id<=captured_frame_id;
+      end
+  end
+  assign O_camera_frame_id=camera_frame_id;
+  assign O_target_frame_id=result_frame_id;
+  assign O_target_boxes=detected_boxes;
+  assign O_target_held=detected_held;
+  assign O_target_update=stable_update;
+  assign O_target_overflow=detected_overflow;
   assign O_tdata  = display_data_128;
   assign O_tlast  = logo_last;
   assign O_tuser  = display_user_128    ;

@@ -7,7 +7,7 @@ set_pin_assignment	{ IO_cam_sda }		{ LOCATION = J3; IOSTANDARD  = LVCMOS33; DRIV
 set_pin_assignment	{ O_cam_24m }	{ LOCATION = L3; IOSTANDARD  = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
 set_pin_assignment	{ O_cam_rst }		{ LOCATION = L2; IOSTANDARD  = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
 
-# SW1: first switch input (key[4] in key_sw reference), high enables ISP tuning
+# SW1 high enables automatic aiming; low holds the current gimbal position
 set_pin_assignment { I_sw1 } { LOCATION = A4; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 
 # 板上按键 KEY0~KEY3，低有效
@@ -23,3 +23,7 @@ set_pin_assignment	{ O_tmds_ch2_p }		{ LOCATION = H14; IOSTANDARD = TMDS33; PULL
 set_pin_assignment	{ O_tmds_clk_p }		{ LOCATION = C17; IOSTANDARD = TMDS33; PULLTYPE = NONE; }
 
 
+
+# Camera gimbal, matching SG90 example wiring.
+set_pin_assignment { O_servo_pan_pwm } { LOCATION = V1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLDOWN; }
+set_pin_assignment { O_servo_tilt_pwm } { LOCATION = U1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLDOWN; }

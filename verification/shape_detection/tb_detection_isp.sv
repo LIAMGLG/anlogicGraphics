@@ -8,6 +8,26 @@ module tb_detection_isp;
     reg [23:0] rgb;
     wire [127:0] outdata;
     wire outvalid,outuser;
+    reg servo_clk=0;
+    always #10 servo_clk=~servo_clk;
+    wire [255:0] target_boxes;
+    wire [3:0] target_held;
+    wire target_update,target_overflow;
+    wire [15:0] camera_frame_id,target_frame_id;
+    red_rect_gimbal #(.TILT_REVERSE(1)) gimbal (
+        .I_detect_clk(clk),.I_servo_clk(servo_clk),.I_rst_n(rst),.I_enable(1'b1),
+        .I_update(target_update),.I_overflow(target_overflow),
+        .I_frame_id(camera_frame_id),.I_sample_frame_id(target_frame_id),.I_boxes(target_boxes),.I_held(target_held),.O_pan_pwm(),.O_tilt_pwm());
+    task check_gimbal(input bit missing,input integer expected_frame);
+        repeat(100) @(negedge servo_clk);
+        if(target_boxes!==dut.detected_boxes || target_held!==dut.detected_held)
+            $fatal(1,"ISP gimbal exported snapshot");
+        if(target_frame_id!=expected_frame || camera_frame_id!=expected_frame)
+            $fatal(1,"ISP accepted-frame timestamp lost across CCL/tracker: got=%0d expected=%0d",target_frame_id,expected_frame);
+        if(missing ? gimbal.received[22] :
+            (!gimbal.received[22] || $signed(gimbal.received[8:0])<=0 || $signed(gimbal.received[17:9])!=0))
+            $fatal(1,"ISP PD must command left only; held must stop");
+    endtask
     function automatic [15:0] expected_decimal(input integer value);
         begin
             expected_decimal[15:12]=value/1000;expected_decimal[11:8]=(value/100)%10;
@@ -31,6 +51,9 @@ module tb_detection_isp;
         end
     endtask
     isp_top dut (.axi4s_video_aclk(clk),.I_rst_n(rst),.I_key_bin(1'b1),.I_key_detect(key),
+        .O_target_boxes(target_boxes),.O_target_held(target_held),
+        .O_target_update(target_update),.O_target_overflow(target_overflow),
+        .O_camera_frame_id(camera_frame_id),.O_target_frame_id(target_frame_id),
         .I_tlast(last),.I_tuser(user),.I_tdata(data),.I_tvalid(valid),.I_tdest(10'd0),
         .O_tready(1'b1),.O_tdata(outdata),.O_tlast(),.O_tuser(outuser),.O_tvalid(outvalid),.I_tready());
     initial begin
@@ -59,6 +82,7 @@ module tb_detection_isp;
            dut.detected_boxes[47:38]!=300 || dut.detected_boxes[26:17]!=395)
             $fatal(1,"Full ISP scale mapping");
         // A publication between frames must become visible at the next OSD SOF.
+        check_gimbal(0,1);
         @(negedge clk);valid=1;user=1;data=0;
         @(negedge clk);valid=0;user=0;
         repeat(10) @(negedge clk);
@@ -84,6 +108,7 @@ module tb_detection_isp;
             while(!dut.u_target_tracker.O_update && waits<1500000) begin @(posedge clk);#1;waits=waits+1;end
             if(waits==1500000 || dut.detected_overflow || dut.raw_detected_boxes[62:61]!=2)
                 $fatal(1,"Moving ISP completion/ranking");
+            check_gimbal(scene==1,scene*2+3);
             if(dut.detected_count!=(scene==1 ? 2 : 3) || dut.detected_held!=(scene==1 ? 4'b0001 : 0))
                 $fatal(1,"Moving ISP measured count/held state");
             if(dut.detected_boxes[58:48]!=416 || dut.detected_boxes[64+58 -:11]!=176 ||

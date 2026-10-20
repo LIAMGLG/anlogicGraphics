@@ -10,8 +10,10 @@ module design_top_wrapper (
     output wire       O_cam_rst,
       
     inout wire [3:0]  I_button,
-    input wire       I_sw1, // reserved switch input (A4); gain keys are always enabled
+    input wire       I_sw1, // high enables automatic red rectangle aiming
 
+    output wire       O_servo_pan_pwm, // V1, J1 pin 2
+    output wire       O_servo_tilt_pwm, // U1, J1 pin 4
     output wire       O_screen_pwm,
     output wire       O_tmds_ch0_p,
     output wire       O_tmds_ch1_p,
@@ -706,10 +708,27 @@ assign S_raw_tuser  = S_axis_tuser;
 
 
 //ISP算法顶层模块
+wire [255:0] S_target_boxes;
+wire [3:0] S_target_held;
+wire S_target_update,S_target_overflow;
+wire [15:0] S_camera_frame_id,S_target_frame_id;
+red_rect_gimbal #(
+    .TILT_REVERSE(1) // Actual camera mounting: reverse vertical correction.
+) u_red_rect_gimbal (
+    .I_detect_clk(S_csi_rx_clk),.I_servo_clk(I_sys_clk),
+    .I_rst_n(S_rst_n && I_rst_n),.I_enable(I_sw1),
+    .I_update(S_target_update),.I_overflow(S_target_overflow),
+    .I_boxes(S_target_boxes),.I_held(S_target_held),
+    .I_frame_id(S_camera_frame_id),.I_sample_frame_id(S_target_frame_id),
+    .O_pan_pwm(O_servo_pan_pwm),.O_tilt_pwm(O_servo_tilt_pwm)
+);
 isp_top u_isp_top (
 .axi4s_video_aclk(S_csi_rx_clk),
 .I_rst_n         (S_rst_n),
 .I_key_bin       (I_button[0]),   // key1: cycle normal / binary / edge / cartoon
+.O_target_boxes(S_target_boxes),.O_target_held(S_target_held),
+.O_target_update(S_target_update),.O_target_overflow(S_target_overflow),
+.O_camera_frame_id(S_camera_frame_id),.O_target_frame_id(S_target_frame_id),
 .I_key_detect    (I_button[3]),   // k4: toggle detection overlays
 .I_tlast         (S_raw_tlast	),
 .I_tuser         (S_raw_tuser	),

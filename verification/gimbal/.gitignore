@@ -1,0 +1,5 @@
+/work/
+/*.log
+/modelsim.ini
+/transcript
+/*.wlf
