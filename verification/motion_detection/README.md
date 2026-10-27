@@ -37,6 +37,12 @@ SDC及原有req1/ack1同步器未修改，两个已验证第一级入口例外�
 
 ## 复现验证
 
+2026-10-20追加自动瞄准联动：顶层SW1接入ISP的`I_motion_inhibit`，两级同步后与原MOTION模式使能一起在视频SOF锁存。自动瞄准开启期间暂停整个运动检测，即使云台暂时静止；关闭后等待12次SOF，下一帧开始建立新参考，后续连续两帧变化才发布区域。暂停清除旧区域、历史及ready，MOTION显示WAIT，视频模式/流水线和后台红绿检测不受影响。开关若在帧中变化，当前帧仍完成，下一个SOF暂停；已显示的框也按原显示SOF锁存规则更新。
+
+新增状态为2位开关同步器和4位等待计数，无新增帧缓存或乘除法；实际物理资源与同步器时序待用户新TD Run确认。`tb_motion_isp`扩展覆盖暂停、12次SOF等待、参考重建及恢复后全区域判定。约200 ms仅按60 fps估算，不是舵机停稳实测值。
+
+2026-10-20本地ModelSim ALTERA 10.3c回归PASS：独立运动均值/门限/不完整帧、四帧720p、逐像素叠加，以及扩展后的12帧720p ISP联动（含12次额外等待SOF）。六模式、卡通/Sobel、OSD和RGB增益回归同时PASS。ISP仍使用demosaic/AWB替身，不覆盖真实相机、机械停稳、DDR或HDMI硬件。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File verification/motion_detection/run_sim.ps1 -ModelSimBin D:\modelsim10.4\win64
 powershell -ExecutionPolicy Bypass -File verification/edge_modes/run_sim.ps1 -ModelSimBin D:\modelsim10.4\win64

@@ -1,8 +1,13 @@
-module isp_top (
+module isp_top #(parameter integer AUTO_AWB=1, AUTO_AE=1, NATURAL_COLOR=1, SHOW_EXPOSURE=1) (
     input 			axi4s_video_aclk,
     input 			I_rst_n			,
     input 			I_key_bin		,   // key1: normal / binary / edge / cartoon / gray / motion
+    input wire [29:0] I_exposure_status,
+    input wire      I_camera_adjust, // synchronized sensor-write event, never a video reset
+    output wire O_stats_valid,O_stats_high,
+    output wire [7:0] O_stats_luma,
     input wire      I_key_detect,    // k4: toggle detection overlays
+    input wire      I_motion_inhibit, // SW1 auto aiming: camera may move
     input 			I_tlast			,
     input 			I_tuser			,
     input [39:0] 	I_tdata			,
@@ -32,6 +37,12 @@ wire         m_aixs_tvalid;  //synthesis keep
   wire         awb_O_tuser;  //synthesis keep 
   wire [ 95:0] awb_O_tdata;  //synthesis keep 
   wire         awb_O_tvalid;  //synthesis keep 
+  wire awb_color_change;
+  reg [2:0] imaging_hold;
+  always @(posedge axi4s_video_aclk or negedge I_rst_n)
+      if(!I_rst_n) imaging_hold<=0;
+      else if(I_camera_adjust || awb_color_change) imaging_hold<=4;
+      else if(awb_O_tuser && imaging_hold!=0) imaging_hold<=imaging_hold-1'b1;
   wire         awb_O_tready;  //synthesis keep 
   wire [95:0] gain_data;
   wire gain_valid,gain_user,gain_last;
@@ -82,6 +93,18 @@ wire         m_aixs_tvalid;  //synthesis keep
   reg [95:0] motion_rgb_d1,motion_rgb_d2,motion_rgb_d3,motion_rgb_d4;
   wire [143:0] motion_regions;
   wire motion_ready,motion_selected;
+  // Conservative suppression for the whole auto-aim interval. Synchronize the
+  // switch locally; after release allow 12 video frames for mechanical settling.
+  (* async_reg="true" *) reg motion_inhibit1,motion_inhibit2;
+  reg [3:0] motion_settle;
+  always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
+      if(!I_rst_n) begin motion_inhibit1<=0;motion_inhibit2<=0;motion_settle<=0;end
+      else begin
+          motion_inhibit1<=I_motion_inhibit;motion_inhibit2<=motion_inhibit1;
+          if(motion_inhibit2) motion_settle<=12;
+          else if(edge_O_tuser && motion_settle!=0) motion_settle<=motion_settle-1'b1;
+      end
+  end
   wire [95:0] motion_data;
   wire motion_valid,motion_user,motion_last;
   reg [2:0] overlay_mode_d1,overlay_mode_d2,overlay_mode_d3;
@@ -141,9 +164,11 @@ data128_96 u_data128_96 (
 );
 
 awb #(
+    .AUTO_ENABLE(AUTO_AWB),
     .IMG_HEIGHT(720 ),
     .IMG_WIDTH (1280)
 ) u_awb (
+    .O_stats_valid(O_stats_valid),.O_luma(O_stats_luma),.O_high(O_stats_high),.O_color_change(awb_color_change),
     .I_clk   (axi4s_video_aclk),
     .I_rst_n (I_rst_n),
     .I_tlast (m_aixs_tlast),
@@ -158,7 +183,7 @@ awb #(
     .O_tready(awb_O_tready)
 );
 
-color_gain_rgb96 u_color_gain (
+color_gain_rgb96 #(.NEUTRAL(NATURAL_COLOR)) u_color_gain (
     .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),
     .I_tdata(awb_O_tdata),.I_tvalid(awb_O_tvalid),.I_tuser(awb_O_tuser),.I_tlast(awb_O_tlast),
     .O_tdata(gain_data),.O_tvalid(gain_valid),.O_tuser(gain_user),.O_tlast(gain_last)
@@ -236,7 +261,8 @@ always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
     end
 end
 motion_detect_rgb96 u_motion_detect (
-    .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_enable(video_mode_d2==3'd5),
+    .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),
+    .I_enable(video_mode_d2==3'd5 && !motion_inhibit2 && motion_settle==0 && imaging_hold==0),
     .I_tdata(motion_rgb_d4),.I_tvalid(edge_O_tvalid),.I_tuser(edge_O_tuser),.I_tlast(edge_O_tlast),
     .O_regions(motion_regions),.O_ready(motion_ready)
 );
@@ -272,15 +298,15 @@ grayscale_rgb96 u_grayscale (
         else if(detection_key_pressed) detection_enabled<=~detection_enabled;
     // Saturation affects the selected display image, before all OSD graphics.
     // Color detection uses ungained AWB RGB.
-    saturation_rgb96 u_saturation (
+    saturation_rgb96 #(.BOOST_ENABLE(!NATURAL_COLOR)) u_saturation (
         .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),
         .I_tdata(processed_data),.I_tvalid(edge_O_tvalid),.I_tuser(edge_O_tuser),.I_tlast(edge_O_tlast),
         .I_mode(video_mode_d2),.O_tdata(saturation_data),
         .O_tvalid(saturation_valid),.O_tuser(saturation_user),.O_tlast(saturation_last),.O_mode(saturation_mode)
     );
-    mode_osd_rgb96 #(.IMG_WIDTH(1280)) u_mode_osd (
+    mode_osd_rgb96 #(.IMG_WIDTH(1280),.SHOW_EXPOSURE(SHOW_EXPOSURE),.AUTO_AE(AUTO_AE)) u_mode_osd (
         .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n),
-        .I_mode(saturation_mode), .I_tdata(saturation_data),
+        .I_exposure_status(I_exposure_status),.I_mode(saturation_mode), .I_tdata(saturation_data),
         .I_tvalid(saturation_valid), .I_tuser(saturation_user), .I_tlast(saturation_last),
         .O_tdata(osd_data), .O_tvalid(osd_valid), .O_tuser(osd_user), .O_tlast(osd_last)
     );

@@ -13,11 +13,12 @@ module demosaic #(parameter IMG_HEIGHT=720, IMG_WIDTH=1280, data_complete_delay=
     assign O_tvalid = axi4s_video_tvalid;
     assign axi4s_video_tready = O_tready;
 endmodule
-module awb #(parameter IMG_HEIGHT=720, IMG_WIDTH=1280) (
+module awb #(parameter IMG_HEIGHT=720, IMG_WIDTH=1280, AUTO_ENABLE=1) (
     input I_clk, I_rst_n, I_tlast, I_tuser, input [95:0] I_tdata, input I_tvalid,
     output I_tready, output O_tlast, O_tuser, output [95:0] O_tdata,
-    output O_tvalid, input O_tready
+    output O_stats_valid,O_high,O_color_change, output [7:0] O_luma, output O_tvalid, input O_tready
 );
+    assign O_stats_valid=0; assign O_high=0; assign O_color_change=0; assign O_luma=0;
     assign O_tlast=I_tlast; assign O_tuser=I_tuser;
     assign O_tdata=I_tdata; assign O_tvalid=I_tvalid;
     assign I_tready=O_tready;
@@ -27,7 +28,7 @@ module tb_isp_modes;
     reg rst_n=0, valid=0, user=0, last=0;
     reg [39:0] data=0;
     reg [2:0] requested=0;
-    isp_top dut (.axi4s_video_aclk(clk), .I_rst_n(rst_n), .I_key_bin(1'b1), .I_key_detect(1'b1),
+    isp_top #(.NATURAL_COLOR(0),.SHOW_EXPOSURE(0)) dut (.I_camera_adjust(1'b0),.I_exposure_status(30'd0),.axi4s_video_aclk(clk), .I_rst_n(rst_n), .I_key_bin(1'b1), .I_key_detect(1'b1), .I_motion_inhibit(1'b0),
         .I_tlast(last), .I_tuser(user), .I_tdata(data), .I_tvalid(valid), .I_tdest(10'd0),
         .O_tready(1'b1), .O_tdata(), .O_tlast(), .O_tuser(), .O_tvalid(), .I_tready());
     reg [95:0] expected_d1=0, expected_d2=0;

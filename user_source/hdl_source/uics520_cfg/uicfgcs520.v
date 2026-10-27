@@ -42,6 +42,7 @@ module uicfgcs520 #(
     reg  [8:0]  reg_index;
     reg  [16:0] reset_wait_cnt;
     reg         ae_table_active;
+    reg [15:0] ae_latched,ag_latched;
     wire        iic_busy;
     wire        iic_bus_error;
     wire [7:0]  rd_data;
@@ -64,6 +65,7 @@ module uicfgcs520 #(
             wr_data          <= 32'd0;
             reg_index        <= 9'd0;
             reset_wait_cnt   <= 17'd0;
+            ae_latched<=1991;ag_latched<=16;
             ae_table_active  <= 1'b0;
             O_cfg_done       <= 1'b0;
             O_ae_cfg_done    <= 1'b0;
@@ -134,6 +136,7 @@ module uicfgcs520 #(
                             state <= ST_WR_REQ;
                         end
                     end else if (I_ae_req) begin
+                        ae_latched<=I_ae;ag_latched<=I_ag;
                         ae_table_active <= 1'b1;
                         O_ae_cfg_done <= 1'b0;
                         reg_index <= 9'd0;
@@ -209,7 +212,7 @@ module uicfgcs520 #(
     );
 
     SC520GainTbl u_gain (
-        .I_AG(I_ag),
+        .I_AG(ag_latched),
         .O(gain_value)
     );
 
@@ -217,7 +220,7 @@ module uicfgcs520 #(
         .REG_INDEX(reg_index),
         .REG_DATA(ae_reg_data),
         .REG_SIZE(ae_reg_size),
-        .I_AE(I_ae),
+        .I_AE(ae_latched),
         .I_AG(gain_value)
     );
 endmodule

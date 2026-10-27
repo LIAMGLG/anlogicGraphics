@@ -34,9 +34,18 @@ module cartoon_96 #(
     endfunction
     wire [11:0] incoming = {quantize_pair(I_tdata[95:72],I_tdata[71:48]),
                            quantize_pair(I_tdata[47:24],I_tdata[23:0])};
-    wire [11:0] middle = color_line[current_x];
+    // Read-before-write synchronous RAM. Keep the read register outside reset
+    // so the line store can map to ERAM rather than distributed LUT memory.
+    reg [11:0] middle;
+    always @(posedge I_clk) begin
+        if (I_rst_n && I_tvalid) begin
+            middle <= color_line[current_x];
+            color_line[current_x] <= incoming;
+        end
+    end
     reg [5:0] middle_prev;
-    reg [11:0] centers_d1, centers_d2;
+    reg [11:0] centers_d2;
+    reg valid_d1, clear_prev_d1;
     reg usable_d1, usable_d2;
     wire [23:0] color0 = expand_color(centers_d2[11:6]);
     wire [23:0] color1 = expand_color(centers_d2[5:0]);
@@ -46,26 +55,26 @@ module cartoon_96 #(
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
             x_grp <= 0; y_pos <= 0; middle_prev <= 0;
-            centers_d1 <= 0; centers_d2 <= 0;
+            centers_d2 <= 0; valid_d1 <= 0; clear_prev_d1 <= 0;
             usable_d1 <= 0; usable_d2 <= 0;
         end else begin
-            centers_d1 <= {middle_prev,middle[11:6]};
-            centers_d2 <= centers_d1;
+            centers_d2 <= {middle_prev,middle[11:6]};
+            valid_d1 <= I_tvalid;
+            clear_prev_d1 <= I_tvalid ? (I_tlast || current_x == WIDTH_GROUPS-1) : I_tuser;
+            if (valid_d1) middle_prev <= middle[5:0];
+            if (clear_prev_d1) middle_prev <= 0;
             usable_d1 <= I_tvalid && current_y >= 1 && current_x != 0 && !I_tuser;
             usable_d2 <= usable_d1;
             if (I_tvalid) begin
-                color_line[current_x] <= incoming;
-                middle_prev <= middle[5:0];
                 if (I_tlast || current_x == WIDTH_GROUPS-1) begin
                     x_grp <= 0;
                     y_pos <= (current_y == IMG_HEIGHT-1) ? 11'd0 : current_y+1'b1;
-                    middle_prev <= 0;
                 end else begin
                     x_grp <= current_x+1'b1;
                     y_pos <= current_y;
                 end
             end else if (I_tuser) begin
-                x_grp <= 0; y_pos <= 0; middle_prev <= 0;
+                x_grp <= 0; y_pos <= 0;
             end
         end
     end

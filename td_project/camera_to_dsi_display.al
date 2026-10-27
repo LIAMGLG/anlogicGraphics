@@ -11,6 +11,14 @@
     </HardWare>
     <Source_Files>
         <Verilog>
+            <File Path="../user_source/hdl_source/isp/image_stats_rgb96.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="84"/>
+                </FileInfo>
+            </File>
             <File Path="../user_source/hdl_source/red_rect_gimbal.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>

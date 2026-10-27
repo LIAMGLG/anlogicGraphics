@@ -1,6 +1,6 @@
 // Display-only saturation S=5/4. Approximate luma Y=(R+2G+B)/4.
 // Four RGB888 pixels per beat; data, mode and controls delayed two clocks.
-module saturation_rgb96 (
+module saturation_rgb96 #(parameter integer BOOST_ENABLE=1) (
     input wire I_clk,I_rst_n,
     input wire [95:0] I_tdata,
     input wire I_tvalid,I_tuser,I_tlast,
@@ -35,7 +35,7 @@ module saturation_rgb96 (
             for(lane=0;lane<4;lane=lane+1) begin
                 luma_sum[lane]<={2'b0,I_tdata[95-lane*24 -:8]}+
                     {1'b0,I_tdata[87-lane*24 -:8],1'b0}+{2'b0,I_tdata[79-lane*24 -:8]};
-                O_tdata[95-lane*24 -:24]<={
+                O_tdata[95-lane*24 -:24]<=!BOOST_ENABLE ? rgb_d[95-lane*24 -:24] : {
                     adjust(rgb_d[95-lane*24 -:8],luma_sum[lane][9:2]),
                     adjust(rgb_d[87-lane*24 -:8],luma_sum[lane][9:2]),
                     adjust(rgb_d[79-lane*24 -:8],luma_sum[lane][9:2])};

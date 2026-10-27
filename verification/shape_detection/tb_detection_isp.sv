@@ -50,7 +50,7 @@ module tb_detection_isp;
             end
         end
     endtask
-    isp_top dut (.axi4s_video_aclk(clk),.I_rst_n(rst),.I_key_bin(1'b1),.I_key_detect(key),
+    isp_top #(.NATURAL_COLOR(0),.SHOW_EXPOSURE(0)) dut (.I_camera_adjust(1'b0),.I_exposure_status(30'd0),.axi4s_video_aclk(clk),.I_rst_n(rst),.I_key_bin(1'b1),.I_key_detect(key),.I_motion_inhibit(1'b0),
         .O_target_boxes(target_boxes),.O_target_held(target_held),
         .O_target_update(target_update),.O_target_overflow(target_overflow),
         .O_camera_frame_id(camera_frame_id),.O_target_frame_id(target_frame_id),

@@ -1,6 +1,6 @@
 
 
-module design_top_wrapper (
+module design_top_wrapper #(parameter integer AUTO_AE=1, AUTO_AWB=1, NATURAL_COLOR=1, SHOW_EXPOSURE=1, AE_TARGET=135) (
     input wire        I_sys_clk,
     input wire        I_rst_n,
       
@@ -554,8 +554,38 @@ module design_top_wrapper (
 
   
   // 按键 KEY0~KEY3（D5/A9/B9/C7，低有效）：
-  // KEY0 切换显示模式；KEY1 增益-、KEY2 增益+，不受SW1或显示模式限制
-  ae_set u_ae_set (
+  // KEY0: mode; KEY1/2: AE target -/+ (manual gain with AUTO_AE=0).
+  // Nine-bit stable-payload mailbox: complete-frame metering only.
+  wire S_stats_valid,S_stats_high,S_stats_busy,S_meter_valid,S_stats_error;
+  wire [7:0] S_stats_luma;
+  wire [8:0] S_meter;
+  wire S_ae_adjust,S_ae_fault,S_ae_applied;
+  wire [29:0] S_ae_status_source,S_ae_status_display;
+  wire S_ae_status_busy;
+  reg [29:0] S_ae_status_sent;
+  wire S_ae_status_send=!S_ae_status_busy && S_ae_status_source!=S_ae_status_sent;
+  always @(posedge S_24m_clk or negedge S_rst_n)
+      if(!S_rst_n) S_ae_status_sent<=0;
+      else if(S_ae_status_send) S_ae_status_sent<=S_ae_status_source;
+  ae_display_status u_ae_numbers (
+      .I_clk(S_24m_clk),.I_rst_n(S_rst_n),.I_applied(S_ae_applied),.I_fault(S_ae_fault || S_cam_i2c_error),
+      .I_ae(S_ae[10:0]),.I_ag(S_ag[7:0]),.O_status(S_ae_status_source));
+  latency_cdc #(.WIDTH(30)) u_ae_status (
+      .I_rst_n(S_rst_n),.I_src_clk(S_24m_clk),.I_send(S_ae_status_send),.I_data(S_ae_status_source),
+      .O_busy(S_ae_status_busy),.O_error(),.I_dst_clk(S_csi_rx_clk),.O_valid(),.O_data(S_ae_status_display));
+  (* async_reg="true" *) reg S_adjust1,S_adjust2;
+  reg S_adjust_seen;
+  always @(posedge S_csi_rx_clk or negedge S_rst_n)
+      if(!S_rst_n) begin S_adjust1<=0;S_adjust2<=0;S_adjust_seen<=0;end
+      else begin S_adjust1<=S_ae_adjust;S_adjust2<=S_adjust1;S_adjust_seen<=S_adjust2;end
+  latency_cdc #(.WIDTH(9)) u_ae_meter (
+      .I_rst_n(S_rst_n),.I_src_clk(S_csi_rx_clk),
+      .I_send(S_stats_valid && !S_stats_busy),.I_data({S_stats_high,S_stats_luma}),
+      .O_busy(S_stats_busy),.O_error(S_stats_error),.I_dst_clk(S_24m_clk),
+      .O_valid(S_meter_valid),.O_data(S_meter));
+  ae_set #(.AUTO_ENABLE(AUTO_AE),.TARGET_LUMA(AE_TARGET)) u_ae_set (
+      .I_stats_valid(S_meter_valid),.I_high(S_meter[8]),.I_luma(S_meter[7:0]),
+      .I_iic_error(S_cam_i2c_error),.O_adjust_toggle(S_ae_adjust),.O_target(),.O_fault(S_ae_fault),.O_applied(S_ae_applied),
       .I_clk(S_24m_clk),
       .I_rst(~S_rst_n),
       .I_btn({I_button[2],I_button[1],2'b11}),
@@ -722,7 +752,9 @@ red_rect_gimbal #(
     .I_frame_id(S_camera_frame_id),.I_sample_frame_id(S_target_frame_id),
     .O_pan_pwm(O_servo_pan_pwm),.O_tilt_pwm(O_servo_tilt_pwm)
 );
-isp_top u_isp_top (
+isp_top #(.AUTO_AWB(AUTO_AWB),.AUTO_AE(AUTO_AE),.NATURAL_COLOR(NATURAL_COLOR),.SHOW_EXPOSURE(SHOW_EXPOSURE)) u_isp_top (
+.O_stats_valid(S_stats_valid),.O_stats_high(S_stats_high),.O_stats_luma(S_stats_luma),
+.I_camera_adjust(S_adjust2 ^ S_adjust_seen),.I_exposure_status(S_ae_status_display),
 .axi4s_video_aclk(S_csi_rx_clk),
 .I_rst_n         (S_rst_n),
 .I_key_bin       (I_button[0]),   // key1: cycle normal / binary / edge / cartoon
@@ -730,6 +762,7 @@ isp_top u_isp_top (
 .O_target_update(S_target_update),.O_target_overflow(S_target_overflow),
 .O_camera_frame_id(S_camera_frame_id),.O_target_frame_id(S_target_frame_id),
 .I_key_detect    (I_button[3]),   // k4: toggle detection overlays
+.I_motion_inhibit(I_sw1),
 .I_tlast         (S_raw_tlast	),
 .I_tuser         (S_raw_tuser	),
 .I_tdata         (S_raw_tdata	),

@@ -6,7 +6,7 @@ module tb_mode_osd;
     reg [2:0] mode=0;
     wire [95:0] result;
     wire ov, ou, ol;
-    mode_osd_rgb96 dut (.I_clk(clk), .I_rst_n(rst_n), .I_mode(mode),
+    mode_osd_rgb96 #(.SHOW_EXPOSURE(0)) dut (.I_clk(clk), .I_rst_n(rst_n), .I_mode(mode),
         .I_tdata(data), .I_tvalid(valid), .I_tuser(user), .I_tlast(last),
         .O_tdata(result), .O_tvalid(ov), .O_tuser(ou), .O_tlast(ol));
     integer frame, row, beat, lane, px, idx, fontrow, fontcol, yellow_count;

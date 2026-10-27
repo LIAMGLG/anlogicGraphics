@@ -85,6 +85,14 @@ try {
     if (!(Select-String -Quiet -LiteralPath verification/edge_modes/isp_simulation.log -Pattern 'PASS: ISP normal/binary/edge/cartoon/gray mux')) {
         throw 'ISP simulation did not reach PASS'
     }
+    & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLibrary -sv verification/auto_imaging/tb_imaging_hold.sv
+    if ($LASTEXITCODE -ne 0) { throw 'Imaging hold vlog failed' }
+    & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $ispLibrary tb_imaging_hold `
+        -do 'onerror {quit -code 1}; run -all; quit -code 0' `
+        -l verification/auto_imaging/hold.log
+    if ($LASTEXITCODE -ne 0 -or !(Select-String -Quiet -LiteralPath verification/auto_imaging/hold.log -Pattern 'PASS:')) {
+        throw 'AE/AWB motion hold did not pass'
+    }
     & (Join-Path $ModelSimBin 'vlog.exe') -work $ispLibrary -sv verification/motion_detection/tb_motion_isp.sv
     if ($LASTEXITCODE -ne 0) { throw 'Motion ISP vlog failed' }
     & (Join-Path $ModelSimBin 'vsim.exe') -c -lib $ispLibrary tb_motion_isp `

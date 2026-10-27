@@ -1,6 +1,6 @@
 // Fixed post-AWB gains for four RGB888 pixels, with unsigned saturation.
 // Floor division by 128; data/valid/SOF/last all have two-cycle latency.
-module color_gain_rgb96 (
+module color_gain_rgb96 #(parameter integer NEUTRAL=0) (
     input wire I_clk,I_rst_n,
     input wire [95:0] I_tdata,
     input wire I_tvalid,I_tuser,I_tlast,
@@ -35,9 +35,9 @@ module color_gain_rgb96 (
             O_tdata<=0;O_tvalid<=0;O_tuser<=0;O_tlast<=0;
         end else begin
             for(lane=0;lane<4;lane=lane+1) begin
-                red_product[lane]<=red(I_tdata[95-lane*24 -:8]);
-                green_product[lane]<=green(I_tdata[87-lane*24 -:8]);
-                blue_product[lane]<=blue(I_tdata[79-lane*24 -:8]);
+                red_product[lane]<=NEUTRAL ? {1'b0,I_tdata[95-lane*24 -:8],7'd0}:red(I_tdata[95-lane*24 -:8]);
+                green_product[lane]<=NEUTRAL ? {I_tdata[87-lane*24 -:8],7'd0}:green(I_tdata[87-lane*24 -:8]);
+                blue_product[lane]<=NEUTRAL ? {I_tdata[79-lane*24 -:8],7'd0}:blue(I_tdata[79-lane*24 -:8]);
                 O_tdata[95-lane*24 -:24]<={
                     red_product[lane][15] ? 8'hff : red_product[lane][14:7],
                     green_product[lane][14:7],blue_product[lane][14:7]};

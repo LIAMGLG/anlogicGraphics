@@ -5,3 +5,6 @@
 /td_*.log
 /td_*.logw
 /transcript
+
+# Local document rendering checks.
+/docs/.test_document_qa/

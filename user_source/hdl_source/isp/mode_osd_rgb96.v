@@ -3,10 +3,12 @@
 // Fixed panel: x=16..239, y=16..47; 16x16 glyphs enlarged 2x.
 // Adds one cycle to data and all stream control signals. No independent stall buffer.
 module mode_osd_rgb96 #(
-    parameter integer IMG_WIDTH = 1280
+    parameter integer IMG_WIDTH = 1280,
+    parameter integer SHOW_EXPOSURE=1,AUTO_AE=1
 )(
     input wire I_clk, I_rst_n,
     input wire [2:0] I_mode,
+    input wire [29:0] I_exposure_status,
     input wire [95:0] I_tdata,
     input wire I_tvalid, I_tuser, I_tlast,
     output reg [95:0] O_tdata,
@@ -20,6 +22,11 @@ module mode_osd_rgb96 #(
     wire [10:0] local_y = current_y - 11'd16;
     wire inside_panel = current_x >= 16 && current_x < 240 &&
                         current_y >= 16 && current_y < 48;
+    wire inside_exposure=SHOW_EXPOSURE!=0 && current_x>=256 && current_x<800 &&
+                         current_y>=16 && current_y<48;
+    wire [11:0] exposure_x=current_x-12'd256;
+    reg [29:0] exposure_status;
+    reg [7:0] exposure_char;
     wire [2:0] mode=I_mode<=5 ? I_mode : 3'd0;
     reg [7:0] character;
     wire [15:0] glyph;
@@ -67,7 +74,43 @@ module mode_osd_rgb96 #(
             default:character=8'h20;
         endcase
     end
-    osd_char_lib u_font (.I_char(character), .I_row(local_y[4:1]), .O_row_bits(glyph));
+    // Same character ROM and the same output register serve both panels.
+    always @(*) begin
+        exposure_char=8'h20;
+        case(exposure_x[9:5])
+            0:exposure_char=AUTO_AE ? "A":"M";
+            1:exposure_char="E";
+            3:exposure_char=8'h30+{4'd0,exposure_status[27:24]};
+            4:exposure_char=8'h30+{4'd0,exposure_status[23:20]};
+            5:exposure_char=".";
+            6:exposure_char=8'h30+{4'd0,exposure_status[19:16]};
+            7:exposure_char="M";
+            8:exposure_char="S";
+            10:exposure_char="G";
+            11:exposure_char=8'h30+{4'd0,exposure_status[15:12]};
+            12:exposure_char=8'h30+{4'd0,exposure_status[11:8]};
+            13:exposure_char=".";
+            14:exposure_char=8'h30+{4'd0,exposure_status[7:4]};
+            15:exposure_char=8'h30+{4'd0,exposure_status[3:0]};
+            16:exposure_char="X";
+            default:exposure_char=8'h20;
+        endcase
+        if(exposure_status[29] || !exposure_status[28]) case(exposure_x[9:5])
+            0:exposure_char=AUTO_AE ? "A":"M";
+            1:exposure_char="E";
+            3:exposure_char=exposure_status[29] ? "E":"W";
+            4:exposure_char=exposure_status[29] ? "R":"A";
+            5:exposure_char=exposure_status[29] ? "R":"I";
+            6:exposure_char=exposure_status[29] ? " ":"T";
+            default:exposure_char=8'h20;
+        endcase
+    end
+    wire [15:0] font_glyph;
+    // The shared legacy font has no decimal point. Add it locally so exposure
+    // units remain readable without changing the other OSD glyphs.
+    assign glyph = inside_exposure && exposure_char=="." ?
+                   ((local_y[4:1]==11 || local_y[4:1]==12) ? 16'h0180 : 16'd0) : font_glyph;
+    osd_char_lib u_font (.I_char(inside_exposure ? exposure_char:character), .I_row(local_y[4:1]), .O_row_bits(font_glyph));
 
     // Panel origin, character pitch and input groups are all four-pixel aligned,
     // so a single character row serves all four lanes.
@@ -78,6 +121,10 @@ module mode_osd_rgb96 #(
             column = (local_x[4:0] + lane) >> 1;
             if (inside_panel)
                 rendered[95-lane*24 -: 24] = glyph[15-column] ? 24'hfff200 : 24'h000000;
+            if (inside_exposure) begin
+                column=(exposure_x[4:0]+lane)>>1;
+                rendered[95-lane*24 -:24]=glyph[15-column] ? 24'hfff200:24'h000000;
+            end
         end
     end
 
@@ -85,11 +132,13 @@ module mode_osd_rgb96 #(
         if (!I_rst_n) begin
             x <= 0; y <= 0;
             O_tdata <= 0; O_tvalid <= 0; O_tuser <= 0; O_tlast <= 0;
+            exposure_status<=0;
         end else begin
             O_tdata <= rendered;
             O_tvalid <= I_tvalid;
             O_tuser <= I_tuser;
             O_tlast <= I_tlast;
+            if(I_tuser) exposure_status<=I_exposure_status;
             if (I_tuser) begin x <= 0; y <= 0; end
             if (I_tvalid) begin
                 if (I_tlast || current_x == IMG_WIDTH-4) begin
