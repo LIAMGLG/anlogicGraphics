@@ -16,6 +16,20 @@ module tb_exposure_osd;
     integer y,x,lane,px,index,col,dots=0;
     reg [15:0] reference_row;
     reg [23:0] expected;
+    // Independent eight-row reference for the digits used in this status line.
+    function [15:0] compact_digit(input [7:0] c,input integer r);
+        reg [63:0] shape;
+        begin
+            case(c)
+                "0":shape=64'h1e3333333333331e;
+                "1":shape=64'h0c1c0c0c0c0c0c1e;
+                "6":shape=64'h1e3330303e33331e;
+                default:shape=0;
+            endcase
+            compact_digit=0;
+            if(r>=2 && r<=9) compact_digit={shape[63-(r-2)*8 -:8],8'd0};
+        end
+    endfunction
     initial begin
         repeat(4) @(negedge clk);rst=1;user=1;
         @(negedge clk);user=0;
@@ -27,7 +41,9 @@ module tb_exposure_osd;
             if(!ov || ol!==last || ou) $fatal(1,"OSD control alignment");
             if(y>=16 && x*4>=256 && x*4<800) begin
                 index=(x*4-256)/32;ch=text_value[135-index*8 -:8];font_row=(y-16)/2;
-                #1;reference_row=ch=="." ? ((font_row==11 || font_row==12) ? 16'h0180:0):row_bits;
+                #1;reference_row=row_bits;
+                if(ch>="0" && ch<="9") reference_row=compact_digit(ch,font_row);
+                if(ch==".") reference_row=(font_row==8 || font_row==9) ? 16'h0c00:0;
                 for(lane=0;lane<4;lane=lane+1) begin
                     px=x*4+lane;col=((px-256)%32)/2;
                     expected=reference_row[15-col] ? 24'hfff200:24'h000000;

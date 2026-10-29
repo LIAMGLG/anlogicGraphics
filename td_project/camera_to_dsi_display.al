@@ -444,6 +444,7 @@
             </File>
             <File Path="../user_source/hdl_source/isp/detection_mask_osd_rgb96.v">
                 <FileInfo>
+                    <Attr Name="AutoExcluded" Val="true"/>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>

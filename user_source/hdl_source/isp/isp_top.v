@@ -310,13 +310,22 @@ grayscale_rgb96 u_grayscale (
         .I_tvalid(saturation_valid), .I_tuser(saturation_user), .I_tlast(saturation_last),
         .O_tdata(osd_data), .O_tvalid(osd_valid), .O_tuser(osd_user), .O_tlast(osd_last)
     );
-    detection_mask_osd_rgb96 u_detection_mask_osd (
-        .I_clk(axi4s_video_aclk),.I_rst_n(I_rst_n),.I_enable(detection_enabled && saturation_mode!=3'd5),
-        .I_capture_valid(capture_valid),.I_capture_done(capture_done),.I_result_update(stable_update),
-        .I_x(reduced_x),.I_y(reduced_y),.I_color(reduced_color),
-        .I_tdata(osd_data),.I_tvalid(osd_valid),.I_tuser(osd_user),.I_tlast(osd_last),
-        .O_tdata(mask_osd_data),.O_tvalid(mask_osd_valid),.O_tuser(mask_osd_user),.O_tlast(mask_osd_last)
-    );
+    // MASK V4 preview removed. Preserve its two stream cycles so the mode
+    // pipeline and the downstream detection/motion overlays stay aligned.
+    reg [95:0] osd_data_d1,osd_data_d2;
+    reg [2:0] osd_control_d1,osd_control_d2;
+    always @(posedge axi4s_video_aclk or negedge I_rst_n) begin
+        if(!I_rst_n) begin
+            osd_data_d1<=0;osd_data_d2<=0;
+            osd_control_d1<=0;osd_control_d2<=0;
+        end else begin
+            osd_data_d1<=osd_data;osd_data_d2<=osd_data_d1;
+            osd_control_d1<={osd_valid,osd_user,osd_last};
+            osd_control_d2<=osd_control_d1;
+        end
+    end
+    assign mask_osd_data=osd_data_d2;
+    assign {mask_osd_valid,mask_osd_user,mask_osd_last}=osd_control_d2;
     detection_overlay_rgb96 #(.COORDINATES(1)) u_detection_overlay (
         .I_clk(axi4s_video_aclk), .I_rst_n(I_rst_n), .I_enable(detection_enabled && overlay_mode_d3!=3'd5),
         .I_boxes(detected_boxes), .I_count(detected_count), .I_overflow(detected_overflow),

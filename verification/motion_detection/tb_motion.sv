@@ -148,7 +148,7 @@ module tb_motion_overlay;
             expected[0]=data;
             if(v && f==0) for(lane=0;lane<4;lane=lane+1) begin
                 px=score_x*4+lane;
-                border=px<80 && score_y<64 && (px<2 || px>=78 || score_y<2);
+                border=px<80 && score_y<80 && (px<2 || px>=78 || score_y<2 || score_y>=78);
                 if(border) expected[0][95-lane*24 -:24]=24'hfff200;
             end
             if(u) reference_motion=motion;
@@ -161,9 +161,10 @@ module tb_motion_overlay;
     initial begin
         data={24'h123456,24'h234567,24'h345678,24'h456789};regions[0]=1;
         repeat(4) @(negedge clk);rst=1;
-        for(f=0;f<3;f=f+1) begin
-            en=f!=1;motion=f!=2;
-            for(y=0;y<64;y=y+1) for(x=0;x<320;x=x+1) begin
+        for(f=0;f<5;f=f+1) begin
+            en=f!=1;motion=f!=2;ready=f!=3;
+            // Include the former status panel in moving, still and unready frames.
+            for(y=0;y<96;y=y+1) for(x=0;x<320;x=x+1) begin
                 @(negedge clk);v=1;u=y==0 && x==0;l=x==319;
                 score_x=x;score_y=y;
                 // Changing results mid-frame must not alter latched graphics.
@@ -171,6 +172,6 @@ module tb_motion_overlay;
             end
             @(negedge clk);v=0;u=0;l=0;repeat(4) @(negedge clk);
         end
-        $display("PASS: motion overlay lane order, frame latch, k4 disable, mode bypass and three-clock latency");$finish;
+        $display("PASS: motion overlay without status text, lane order, frame latch, k4 disable, mode bypass and three-clock latency");$finish;
     end
 endmodule

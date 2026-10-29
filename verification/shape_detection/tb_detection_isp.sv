@@ -88,8 +88,8 @@ module tb_detection_isp;
         repeat(10) @(negedge clk);
         if(dut.u_detection_overlay.count!=3 || dut.u_detection_overlay.boxes!==dut.detected_boxes)
             $fatal(1,"Result snapshot integration");
-        if(!dut.u_detection_mask_osd.ready || !dut.u_detection_overlay.converting)
-            $fatal(1,"Mask/coordinate conversion start integration");
+        if(!dut.u_detection_overlay.converting)
+            $fatal(1,"Coordinate conversion start integration");
         if(dut.raw_debug[7:0]!=8'h40 || dut.raw_debug[15:8]!=8'h30)
             $fatal(1,"Contour diagnostic metadata");
         check_coordinates();
@@ -123,7 +123,7 @@ module tb_detection_isp;
             @(negedge clk);valid=0;user=0;repeat(10) @(negedge clk);
             if(dut.u_detection_overlay.boxes!==dut.detected_boxes ||
                 dut.u_detection_overlay.held!==dut.detected_held ||
-                !dut.u_detection_overlay.converting || !dut.u_detection_mask_osd.ready)
+                !dut.u_detection_overlay.converting)
                 $fatal(1,"Moving ISP SOF publication");
             check_coordinates();
         end
@@ -138,8 +138,7 @@ module tb_detection_isp;
         @(negedge clk);valid=0;user=0;
         repeat(10) @(negedge clk);
         if(dut.u_detection_overlay.enabled!==0) $fatal(1,"k4 frame commit");
-        if(dut.u_detection_mask_osd.enabled!==0) $fatal(1,"k4 mask frame commit");
-        $display("PASS: four 720p ISP captures, moving fixed IDs, rank changes, miss/recovery, center coordinates including held tracks, MASK/result SOF snapshot and k4 debounce/held-key/frame commit");
+        $display("PASS: four 720p ISP captures, moving fixed IDs, rank changes, miss/recovery, center coordinates including held tracks, result SOF snapshot and k4 debounce/held-key/frame commit");
         $finish;
     end
     initial begin #100000000;$fatal(1,"ISP detection timeout");end

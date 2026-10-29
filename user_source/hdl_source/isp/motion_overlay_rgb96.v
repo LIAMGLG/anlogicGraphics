@@ -27,23 +27,7 @@ module motion_overlay_rgb96 #(
     wire [3:0] cc=I_tuser ? 4'd0 : col;
     wire [3:0] rr=I_tuser ? 4'd0 : row;
     wire marked=frame_regions[{rr,cc}];
-    wire panel=cx>=16 && cx<144 && cy>=64 && cy<80;
-    wire [11:0] local_x=cx-16;
-    reg [7:0] character;
-    wire [15:0] glyph;
-    wire any_motion=|frame_regions;
-    always @(*) begin
-        character=" ";
-        case(local_x[6:4])
-            0: character= !frame_ready ? "W" : (any_motion ? "M" : "S");
-            1: character= !frame_ready ? "A" : (any_motion ? "O" : "T");
-            2: character= !frame_ready ? "I" : (any_motion ? "V" : "I");
-            3: character= !frame_ready ? "T" : (any_motion ? "E" : "L");
-            4: character= !frame_ready ? " " : (any_motion ? " " : "L");
-            default:character=" ";
-        endcase
-    end
-    osd_char_lib u_font(.I_char(character),.I_row(cy[3:0]),.O_row_bits(glyph));
+    // Motion status text removed; only marked-region borders are drawn.
     reg [95:0] rendered,d1,d2;
     reg v1,v2,u1,u2,l1,l2,m1,m2;
     integer lane;
@@ -53,7 +37,6 @@ module motion_overlay_rgb96 #(
             if(frame_enable && frame_motion) begin
                 if(frame_ready && marked && (tx+lane<2 || tx+lane>=78 || ty<2 || ty>=78))
                     rendered[95-lane*24 -:24]=24'hfff200;
-                if(panel) rendered[95-lane*24 -:24]=glyph[15-(local_x[3:0]+lane)] ? 24'hfff200 : 24'd0;
             end
         end
     end

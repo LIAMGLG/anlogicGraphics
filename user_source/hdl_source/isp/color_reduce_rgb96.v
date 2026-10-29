@@ -4,7 +4,7 @@ module color_reduce_rgb96 #(
     parameter integer IMG_WIDTH=1280, IMG_HEIGHT=720,
     // Low-light floor; relative dominance below still rejects neutral colors.
     parameter [7:0] COLOR_MIN=40, COLOR_MARGIN=12,
-    parameter [7:0] RED_MIN=40, RED_MARGIN=12
+    parameter [7:0] RED_MIN=48, RED_MARGIN=24
 )(
     input wire I_clk, I_rst_n, I_tvalid, I_tuser, I_tlast,
     input wire [95:0] I_tdata,
@@ -29,9 +29,10 @@ module color_reduce_rgb96 #(
     wire [11:0] tb=(sy[1:0]==0 ? 12'd0 : previous[11:0])+sb;
     wire [7:0] r=tr[11:4], g=tg[11:4], b=tb[11:4];
     // Require the absolute margin and dominance over EACH other channel:
-    // red/green >=25%. Blue remains an input to reject non-red/green colors.
+    // Red requires >=50% dominance to reject warm skin tones; green stays 25%.
+    // Thus red must be at least twice EACH other channel, including blue.
     // Round relative margins up; shifts/additions only.
-    wire [7:0] relative_r={2'b0,r[7:2]} + (r[1:0]!=0);
+    wire [7:0] relative_r={1'b0,r[7:1]} + r[0];
     wire [7:0] relative_g={2'b0,g[7:2]} + (g[1:0]!=0);
     wire [7:0] margin_r=RED_MARGIN>relative_r ? RED_MARGIN : relative_r;
     wire [7:0] margin_g=COLOR_MARGIN>relative_g ? COLOR_MARGIN : relative_g;

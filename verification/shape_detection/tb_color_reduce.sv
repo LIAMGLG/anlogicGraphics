@@ -31,7 +31,7 @@ module tb_color_reduce;
                     bb[rx]=bb[rx]+data[79-t*24 -:8];
                 end
                 r=rr[rx]/16;g=gg[rx]/16;b=bb[rx]/16;
-                c0<=r>=40 && r>=g+12 && r>=b+12 && 4*(r-g)>=r && 4*(r-b)>=r ? 1 :
+                c0<=r>=48 && r>=g+24 && r>=b+24 && r>=2*g && r>=2*b ? 1 :
                     g>=40 && g>=r+12 && g>=b+12 && 4*(g-r)>=g && 4*(g-b)>=g ? 2 : 0;
                 x0<=rx;y0<=ry/4;
                 if(last) begin rx=0;ry=ry+1; end else rx=rx+1;
@@ -47,7 +47,7 @@ module tb_color_reduce;
     end
     initial begin
         repeat(4) @(negedge clk);rst=1;
-        for(phase=0;phase<30;phase=phase+1) begin
+        for(phase=0;phase<42;phase=phase+1) begin
             if(phase%2) begin @(negedge clk);valid=0;user=1;last=0; end
             for(row=0;row<48;row=row+1) for(beat=0;beat<16;beat=beat+1) begin
                 @(negedge clk);valid=1;user=phase%2==0 && row==0 && beat==0;last=beat==15;
@@ -76,14 +76,26 @@ module tb_color_reduce;
                         19: sample={8'd29,8'd28,8'd40}; // insufficient absolute margin
                         20: sample={8'd50,8'd60,8'd50}; // dim green-cast gray: reject
                         21: sample={8'd20,8'd44,8'd60}; // dim blue with green content
-                        22: sample={8'd80,8'd48,8'd48}; // bright red accepted
+                        22: sample={8'd80,8'd48,8'd48}; // weak red now rejected
                         23: sample={8'd79,8'd20,8'd20}; // below old floor, now accepted
-                        24: sample={8'd80,8'd49,8'd48}; // below old margin, now accepted
-                        25: sample={8'd60,8'd45,8'd45}; // red relative boundary accepted
+                        24: sample={8'd80,8'd49,8'd48}; // weak red now rejected
+                        25: sample={8'd60,8'd45,8'd45}; // old 25% boundary now rejected
                         26: sample={8'd65,8'd65,8'd80}; // blue detection disabled: background
                         27: sample={8'd66,8'd65,8'd80}; // below blue relative boundary
                         28: sample={8'd65,8'd80,8'd65}; // green still requires 25%: reject
-                        29: sample={8'd80,8'd65,8'd65}; // red still requires 25%: reject
+                        29: sample={8'd80,8'd65,8'd65}; // weak red: reject
+                        30: sample={8'd200,8'd140,8'd110}; // warm skin-like RGB: reject
+                        31: sample={8'd160,8'd95,8'd70}; // darker skin-like RGB: reject
+                        32: sample={8'd240,8'd160,8'd140}; // bright skin-like RGB: reject
+                        33: sample={8'd120,8'd60,8'd40}; // new red ratio boundary: accept
+                        34: sample={8'd120,8'd61,8'd40}; // green just above half: reject
+                        35: sample={8'd120,8'd40,8'd61}; // blue just above half: reject
+                        36: sample={8'd47,8'd10,8'd10}; // below new red floor: reject
+                        37: sample={8'd48,8'd24,8'd24}; // floor and margin boundary: accept
+                        38: sample={8'd255,8'd128,8'd10}; // odd ratio rounds up: reject
+                        39: sample={8'd255,8'd127,8'd127}; // bright boundary: accept
+                        40: sample={8'd255,8'd250,8'd240}; // no bright-channel overflow
+                        41: sample={8'd48,8'd25,8'd10}; // below absolute margin: reject
                     endcase
                     data[95-lane*24 -:24]=sample;
                 end
@@ -91,8 +103,8 @@ module tb_color_reduce;
             end
         end
         @(negedge clk);valid=0;user=0;last=0;repeat(4) @(negedge clk);
-        if(checks!=30*16*12) $fatal(1,"Reducer sample count %0d",checks);
-        $display("PASS: 4x4 RGB average, absolute/relative color thresholds, tinted white rejection, boundary, noise, coordinates, gaps and SOF timings");
+        if(checks!=42*16*12) $fatal(1,"Reducer sample count %0d",checks);
+        $display("PASS: 4x4 RGB average, stricter red purity, skin-like RGB rejection, green thresholds, boundary, noise, coordinates, gaps and SOF timings");
         $finish;
     end
 endmodule

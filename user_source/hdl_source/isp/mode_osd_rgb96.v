@@ -106,10 +106,36 @@ module mode_osd_rgb96 #(
         endcase
     end
     wire [15:0] font_glyph;
-    // The shared legacy font has no decimal point. Add it locally so exposure
-    // units remain readable without changing the other OSD glyphs.
-    assign glyph = inside_exposure && exposure_char=="." ?
-                   ((local_y[4:1]==11 || local_y[4:1]==12) ? 16'h0180 : 16'd0) : font_glyph;
+    // Exposure digits use the same six-column, eight-row footprint and baseline
+    // as the legacy Latin letters (font rows 2..9), with the same 2x scaling.
+    // Keep this override local: other panels still use the original font ROM.
+    function [15:0] exposure_number_row;
+        input [7:0] ch;
+        input [3:0] row;
+        reg [63:0] bitmap;
+        begin
+            case(ch)
+                "0":bitmap=64'h1e3333333333331e;
+                "1":bitmap=64'h0c1c0c0c0c0c0c1e;
+                "2":bitmap=64'h1e3303060c18303f;
+                "3":bitmap=64'h1e3303030e03331e;
+                "4":bitmap=64'h060e1636363f0606;
+                "5":bitmap=64'h3f30303e0303331e;
+                "6":bitmap=64'h1e3330303e33331e;
+                "7":bitmap=64'h3f0303060c0c1818;
+                "8":bitmap=64'h1e33331e3333331e;
+                "9":bitmap=64'h1e33331f0303331e;
+                default:bitmap=0;
+            endcase
+            exposure_number_row=0;
+            if(row>=2 && row<=9)
+                exposure_number_row={bitmap[63-(row-2)*8 -:8],8'd0};
+        end
+    endfunction
+    assign glyph = inside_exposure && exposure_char>="0" && exposure_char<="9" ?
+                   exposure_number_row(exposure_char,local_y[4:1]) :
+                   inside_exposure && exposure_char=="." ?
+                   ((local_y[4:1]==8 || local_y[4:1]==9) ? 16'h0c00 : 16'd0) : font_glyph;
     osd_char_lib u_font (.I_char(inside_exposure ? exposure_char:character), .I_row(local_y[4:1]), .O_row_bits(font_glyph));
 
     // Panel origin, character pitch and input groups are all four-pixel aligned,

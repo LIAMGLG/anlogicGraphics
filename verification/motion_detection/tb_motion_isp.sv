@@ -14,10 +14,17 @@ module tb_motion_isp;
     reg [2:0] out_mode;
     reg [95:0] wanted;
     reg [143:0] expected_map;
+    reg [95:0] osd_ref1=0,osd_ref2=0;
+    reg [2:0] osd_ctrl1=0,osd_ctrl2=0;
     always @(posedge clk) if(rst) begin
+        osd_ref1<=dut.osd_data;osd_ref2<=osd_ref1;
+        osd_ctrl1<={dut.osd_valid,dut.osd_user,dut.osd_last};osd_ctrl2<=osd_ctrl1;
         for(i=3;i>0;i=i-1) rgb_ref[i]<=rgb_ref[i-1];
         rgb_ref[0]<={4{data[23:0]}};
         #1;
+        if(dut.mask_osd_data!==osd_ref2 ||
+           {dut.mask_osd_valid,dut.mask_osd_user,dut.mask_osd_last}!==osd_ctrl2)
+            $fatal(1,"Removed mask preview must pass all pixels and controls with two-cycle latency");
         if(dut.edge_O_tvalid && dut.motion_rgb_d4!==rgb_ref[3]) $fatal(1,"AWB motion alignment");
         if(dut.motion_valid!==dut.detection_valid || dut.motion_user!==dut.detection_user ||
            dut.motion_last!==dut.detection_last) $fatal(1,"parallel overlay latency");
@@ -26,7 +33,7 @@ module tb_motion_isp;
             if(frame_out<8) begin
             out_mode=(frame_out==0 || frame_out==5) ? 0 : 5;
             if(dut.motion_selected!==(out_mode==5)) $fatal(1,"mode output frame %0d",frame_out);
-            if(out_mode==5 && (dut.u_detection_overlay.enabled || dut.u_detection_mask_osd.enabled))
+            if(out_mode==5 && dut.u_detection_overlay.enabled)
                 $fatal(1,"color overlays visible in motion");
             expected_map=0;
             if(frame_out==4) expected_map[0]=1;
