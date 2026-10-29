@@ -70,7 +70,7 @@ module tb_isp_modes;
             luminance = {2'b0,gained_rgb[23:18]} + {1'b0,gained_rgb[15:9]} + {2'b0,gained_rgb[7:2]};
             case(active_mode)
                 0,5: wanted = {4{gained_rgb}};
-                1: wanted = luminance >= 64 ? {96{1'b1}} : 96'd0;
+                1: wanted = luminance >= 128 ? {96{1'b1}} : 96'd0;
                 2: wanted = 0; // two rows: Sobel windows are masked
                 3: wanted = (row >= 1 && group_index > 0) ? {4{24'h55aaaa}} : 96'd0;
                 4: begin

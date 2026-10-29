@@ -190,10 +190,11 @@ color_gain_rgb96 #(.NEUTRAL(NATURAL_COLOR)) u_color_gain (
 );
 
 // Post-AWB RGB gains feed display algorithms; detection uses ungained AWB RGB.
+// Raise the white cutoff to mid-gray to avoid flooding the binary view.
 binary_threshold_96 #(
-    .THRESHOLD(8'd64), .DYNAMIC_THRESHOLD(0)
+    .THRESHOLD(8'd128), .DYNAMIC_THRESHOLD(0)
 ) u_binary_threshold_96 (
-    .I_threshold(8'd64),
+    .I_threshold(8'd128),
     .I_tlast (gain_last),
     .I_tuser (gain_user),
     .I_tdata (gain_data),
